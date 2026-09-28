@@ -3,6 +3,8 @@
 # BIMAP
 ### Business Intelligence Map Designer
 
+[English](readme.md) | [Español](README.es.md)
+
 **Turn your data into presentation-quality PDF maps — no GIS expertise required.**
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)

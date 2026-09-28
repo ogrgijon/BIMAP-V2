@@ -15,6 +15,9 @@ ENV/
 
 # ── Distribution / packaging ──────────────────────────────────────────────────
 dist/
+!dist/
+!dist/*.exe
+!dist/*.zip
 build/
 *.egg-info/
 *.egg
@@ -45,6 +48,8 @@ installer/build/
 # Portable release artifacts produced locally by build_installer.ps1
 BIMAP-v*-windows-x64-portable.exe
 BIMAP-v*-windows-x64.zip
+!dist/BIMAP-v*-windows-x64-portable.exe
+!dist/BIMAP-v*-windows-x64.zip
 
 # ── BIMAP runtime files ───────────────────────────────────────────────────────
 # Tile cache (diskcache creates a directory)

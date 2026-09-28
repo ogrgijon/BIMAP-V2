@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "bimap"
+version = "0.1.0"
+description = "Business Intelligence Map Designer"
+authors = [{ name = "BIMAP Team" }]
+readme = "readme.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PyQt6>=6.6.0",
+    "pydantic>=2.5.0",
+    "requests>=2.31.0",
+    "geopy>=2.4.0",
+    "Pillow>=10.0.0",
+    "openpyxl>=3.1.0",
+    "SQLAlchemy>=2.0.0",
+    "diskcache>=5.6.0",
+    "httpx>=0.26.0",
+    "keyring>=24.3.0",
+    "fontawesomefree>=6.6.0",
+]
+
+[project.scripts]
+bimap = "bimap.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"bimap.data" = ["*.js", "*.ttf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:warnings"
+qt_default_raising = false

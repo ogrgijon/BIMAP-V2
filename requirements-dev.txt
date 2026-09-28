@@ -1,0 +1,5 @@
+# Development-only dependencies (not needed at runtime)
+pytest>=9.0
+pytest-qt>=4.5
+pyinstaller>=6.0
+pyinstaller-hooks-contrib>=2024.0

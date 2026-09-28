@@ -1,0 +1,100 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+# ── Virtual environment ────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# ── Distribution / packaging ──────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ── Test / coverage ────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.lcov
+
+# ── Editor & IDE ──────────────────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# ── PyInstaller ───────────────────────────────────────────────────────────────
+installer/dist/
+installer/build/
+*.spec.bak
+# Portable release artifacts produced locally by build_installer.ps1
+BIMAP-v*-windows-x64-portable.exe
+BIMAP-v*-windows-x64.zip
+
+# ── BIMAP runtime files ───────────────────────────────────────────────────────
+# Tile cache (diskcache creates a directory)
+tile_cache/
+*.db
+*.db-shm
+*.db-wal
+TODO.md
+# Auto-save and backup files
+*.bimap.bak
+autosave_*.bimap
+
+# Exported PDFs generated during development
+*.pdf
+
+# BIMAP project files may contain connection details or API tokens
+*.bimap
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Secrets / credentials ─────────────────────────────────────────────────────
+.env
+.env.*
+*.env.local
+secrets.json
+credentials.json
+token.json
+*.key
+*.pem
+*.p12
+*.pfx
+# Never commit connection strings or API keys
+connection_strings.*
+api_keys.*
+
+# ── Local development notes ──────────────────────────────────────────────────
+dev/COMPLETION_SUMMARY.md
+dev/reports/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Dev/test source packs (local only, not for distribution) ─────────────────
+src/bimap/packs/*_dev.bsp

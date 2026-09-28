@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BIMAP Source Pack — Spain Open Geospatial Services
+  ====================================================
+  Format version: 1
+  Author:         BIMAP Community / IDEE
+  License:        CC-BY 4.0
+
+  Import this file in BIMAP via  Data ▸ Import Source Pack…
+
+  Each <source> entry describes one pre-configured data layer.
+  Parameters marked  fixed="true"  are locked service defaults.
+  Parameters marked  fixed="false" can be customised at import time.
+-->
+<source-pack version="1" xmlns="urn:bimap:source-pack:1">
+
+  <meta>
+    <name>Spain Open Geospatial Services</name>
+    <author>BIMAP Community</author>
+    <description>Free INSPIRE and open-data WFS and GeoJSON layers from Spanish public SDIs (IDEE, IGN, INE)</description>
+    <version>1.0.0</version>
+    <url>https://www.idee.es</url>
+    <license>CC-BY 4.0</license>
+  </meta>
+
+  <sources>
+
+    <!-- ── Transport ──────────────────────────────────────────────────── -->
+
+    <source id="ign-transport-roads"
+            type="wfs"
+            name="Road Transport Network (INSPIRE)"
+            category="Transport">
+      <description>Spanish road links from the INSPIRE Transport Networks theme (IGN / IDEE).</description>
+      <tags>transport,roads,INSPIRE,Spain,IGN</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/redes-transporte"
+               fixed="true"/>
+        <param name="type_name"
+               value="TN-RoadTransportNetwork:RoadLink"
+               fixed="true"/>
+        <param name="max_features"
+               value="500"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="5000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box (minx,miny,maxx,maxy — WGS84)"
+               type="string"/>
+        <param name="cql_filter"
+               value=""
+               fixed="false"
+               label="CQL Filter (optional)"
+               type="string"/>
+      </connection>
+    </source>
+
+    <source id="ign-transport-rail"
+            type="wfs"
+            name="Railway Transport Network (INSPIRE)"
+            category="Transport">
+      <description>Spanish railway lines from the INSPIRE Transport Networks theme.</description>
+      <tags>transport,rail,railway,INSPIRE,Spain,IGN</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/redes-transporte"
+               fixed="true"/>
+        <param name="type_name"
+               value="TN-RailTransportNetwork:RailwayLink"
+               fixed="true"/>
+        <param name="max_features"
+               value="500"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="5000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Buildings ──────────────────────────────────────────────────── -->
+
+    <source id="idee-buildings"
+            type="wfs"
+            name="Buildings — INSPIRE BU Theme"
+            category="Urban">
+      <description>INSPIRE Building footprints (BU theme) from IDEE. Use a bounding box to limit the response area.</description>
+      <tags>buildings,urban,cadastre,INSPIRE,Spain</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/edificios"
+               fixed="true"/>
+        <param name="type_name"
+               value="BU.Building"
+               fixed="true"/>
+        <param name="max_features"
+               value="200"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="2000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box (required for large areas)"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Administrative Boundaries ─────────────────────────────────── -->
+
+    <source id="ign-admin-municipalities"
+            type="wfs"
+            name="Municipal Boundaries (INSPIRE AU)"
+            category="Administrative">
+      <description>Spanish municipality polygons — INSPIRE Administrative Units theme.</description>
+      <tags>administrative,municipalities,boundaries,INSPIRE,Spain,IGN</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/unidades-administrativas"
+               fixed="true"/>
+        <param name="type_name"
+               value="AU.AdministrativeUnit"
+               fixed="true"/>
+        <param name="max_features"
+               value="100"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="1000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box"
+               type="string"/>
+        <param name="cql_filter"
+               value=""
+               fixed="false"
+               label="CQL Filter (e.g. nationalLevel=4 for municipalities)"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Hydrography ────────────────────────────────────────────────── -->
+
+    <source id="ign-hydro-watercourses"
+            type="wfs"
+            name="Watercourses (INSPIRE HY)"
+            category="Hydrography">
+      <description>Rivers and streams — INSPIRE Hydrography theme from IGN Spain.</description>
+      <tags>hydrography,rivers,water,INSPIRE,Spain</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/hidrografia"
+               fixed="true"/>
+        <param name="type_name"
+               value="HY-P:Watercourse"
+               fixed="true"/>
+        <param name="max_features"
+               value="500"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="5000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Land Cover ─────────────────────────────────────────────────── -->
+
+    <source id="ign-land-cover"
+            type="wfs"
+            name="Land Cover (SIOSE)"
+            category="Environment">
+      <description>Spanish land cover polygons from the SIOSE national occupancy/cover system.</description>
+      <tags>land cover,environment,SIOSE,Spain,IGN</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/ocupacion-suelo"
+               fixed="true"/>
+        <param name="type_name"
+               value="LC.LandCoverUnit"
+               fixed="true"/>
+        <param name="max_features"
+               value="300"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="2000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box (required for large areas)"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Elevation / Addresses ──────────────────────────────────────── -->
+
+    <source id="ign-addresses"
+            type="wfs"
+            name="Addresses (INSPIRE AD)"
+            category="Urban">
+      <description>Postal addresses — INSPIRE Addresses theme from IGN Spain. Provide a bounding box.</description>
+      <tags>addresses,urban,INSPIRE,Spain</tags>
+      <connection>
+        <param name="url"
+               value="https://servicios.idee.es/wfs-inspire/direcciones"
+               fixed="true"/>
+        <param name="type_name"
+               value="AD.Address"
+               fixed="true"/>
+        <param name="max_features"
+               value="200"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="2000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Statistical / INE ─────────────────────────────────────────── -->
+
+    <source id="ine-census-sections"
+            type="geojson"
+            name="Census Sections (INE GeoJSON)"
+            category="Statistical">
+      <description>Spanish census sections as GeoJSON from the National Statistics Institute (INE). Updated annually.</description>
+      <tags>census,statistics,INE,Spain,sections</tags>
+      <connection>
+        <param name="path_or_url"
+               value="https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain.geojson"
+               fixed="false"
+               label="GeoJSON URL or local path"
+               type="string"/>
+      </connection>
+    </source>
+
+    <!-- ── Protected Areas ───────────────────────────────────────────── -->
+
+    <source id="magrama-natura2000"
+            type="wfs"
+            name="Natura 2000 Protected Areas"
+            category="Environment">
+      <description>Natura 2000 Special Protection Areas and Special Areas of Conservation in Spain (MITERD).</description>
+      <tags>environment,Natura2000,protected areas,biodiversity,Spain</tags>
+      <connection>
+        <param name="url"
+               value="https://inspire.mapama.es/wfs/habitatsydirbrn"
+               fixed="true"/>
+        <param name="type_name"
+               value="PS.ProtectedSite"
+               fixed="true"/>
+        <param name="max_features"
+               value="200"
+               fixed="false"
+               label="Max Features"
+               type="int"
+               min="1"
+               max="2000"/>
+        <param name="bbox"
+               value=""
+               fixed="false"
+               label="Bounding Box"
+               type="string"/>
+      </connection>
+    </source>
+
+  </sources>
+
+</source-pack>

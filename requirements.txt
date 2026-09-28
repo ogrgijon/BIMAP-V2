@@ -1,0 +1,14 @@
+PyQt6>=6.6.0
+PyQt6-Qt6>=6.6.0
+PyQt6-WebEngine>=6.6.0
+pydantic>=2.5.0
+requests>=2.31.0
+geopy>=2.4.0
+reportlab>=4.1.0
+Pillow>=10.0.0
+openpyxl>=3.1.0
+SQLAlchemy>=2.0.0
+diskcache>=5.6.0
+httpx>=0.26.0
+keyring>=24.3.0
+fontawesomefree>=6.6.0

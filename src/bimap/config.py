@@ -8,7 +8,7 @@ from pathlib import Path
 
 # ── Application ──────────────────────────────────────────────────────────────
 APP_NAME = "BIMAP"
-APP_VERSION = "0.1.0"
+APP_VERSION = "2.0.0"
 APP_ORGANISATION = "BIMAP"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────

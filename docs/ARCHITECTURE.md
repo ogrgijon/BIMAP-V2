@@ -1,4 +1,4 @@
-# BIMAP — Architecture
+# MerekaiBIMAP — Architecture
 
 [← Back to README](../readme.md)
 
@@ -18,7 +18,7 @@
 
 ## 1. High-Level Overview
 
-BIMAP is structured as a classic desktop MVC application with a clear separation between:
+MerekaiBIMAP is structured as a classic desktop MVC application with a clear separation between:
 
 - **Domain models** (Pydantic) — the source of truth
 - **Engine** — business logic, I/O, rendering
@@ -33,7 +33,7 @@ All user actions are wrapped in `QUndoCommand` objects so that every mutation is
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                        BIMAP Application                       │
+│                        MerekaiBIMAP Application                       │
 ├──────────────┬─────────────────┬────────────┬──────────────────┤
 │   UI Layer   │   Map Engine    │ Data Layer │  Export Engine   │
 │   (PyQt6)    │  (Tiles +       │ (Sources + │ (QPdfWriter /    │

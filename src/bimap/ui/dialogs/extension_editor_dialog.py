@@ -2,9 +2,9 @@
 
 Users can write an HTML5 document (with embedded CSS and JS) that will be
 rendered in the system browser with the element's data injected as the
-``BIMAP_DATA`` JavaScript object.
+``MerekaiBIMAP_DATA`` JavaScript object.
 
-BIMAP_DATA structure injected at runtime
+MerekaiBIMAP_DATA structure injected at runtime
 -----------------------------------------
     {
         "type":     "zone" | "keypoint",
@@ -84,7 +84,7 @@ _TEMPLATE_TABLE = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 16px; }
   h2   { color: #89dceb; margin-bottom: 8px; }
@@ -100,7 +100,7 @@ _TEMPLATE_TABLE = """\
   <tbody id="rows"></tbody>
 </table>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('title').textContent = el.name + ' — ' + el.type;
   const tbody = document.getElementById('rows');
   const attributes = el.attributes || el.metadata || {};
@@ -119,7 +119,7 @@ _TEMPLATE_BAR = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body   { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 16px; }
   h2     { color: #89dceb; }
@@ -136,7 +136,7 @@ _TEMPLATE_BAR = """\
 <h2 id="title"></h2>
 <div class="bar-wrap" id="bars"></div>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('title').textContent = el.name;
   const container = document.getElementById('bars');
   const attributes = el.attributes || el.metadata || {};
@@ -164,7 +164,7 @@ _TEMPLATE_GAUGE = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body   { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0;
            display: flex; flex-direction: column; align-items: center; padding: 24px; }
@@ -187,7 +187,7 @@ _TEMPLATE_GAUGE = """\
 <div class="value" id="val">—</div>
 <div class="label" id="key">first numeric metadata key</div>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('name').textContent = el.name;
   const attributes = el.attributes || el.metadata || {};
   const entry = Object.entries(attributes)
@@ -211,7 +211,7 @@ _TEMPLATE_LINE = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 16px; }
   h2   { color: #89dceb; margin-bottom: 12px; }
@@ -223,7 +223,7 @@ _TEMPLATE_LINE = """\
 <h2 id="title"></h2>
 <div class="chart-wrap"><canvas id="chart"></canvas></div>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('title').textContent = el.name;
   const attributes = el.attributes || el.metadata || {};
   const entries = Object.entries(attributes)
@@ -262,7 +262,7 @@ _TEMPLATE_PIE = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 16px; }
   h2   { color: #89dceb; margin-bottom: 12px; }
@@ -274,7 +274,7 @@ _TEMPLATE_PIE = """\
 <h2 id="title"></h2>
 <div class="chart-wrap"><canvas id="chart"></canvas></div>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('title').textContent = el.name;
   const attributes = el.attributes || el.metadata || {};
   const entries = Object.entries(attributes)
@@ -309,7 +309,7 @@ _TEMPLATE_RADAR = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>BIMAP Extension</title>
+<title>MerekaiBIMAP Extension</title>
 <style>
   body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 16px; }
   h2   { color: #89dceb; margin-bottom: 12px; }
@@ -321,7 +321,7 @@ _TEMPLATE_RADAR = """\
 <h2 id="title"></h2>
 <div class="chart-wrap"><canvas id="chart"></canvas></div>
 <script>
-  const el = BIMAP_DATA;
+  const el = MerekaiBIMAP_DATA;
   document.getElementById('title').textContent = el.name;
   const attributes = el.attributes || el.metadata || {};
   const entries = Object.entries(attributes)
@@ -388,9 +388,9 @@ _TEMPLATE_HELLO_WORLD = """\
 </head>
 <body>
 <script>
-// BIMAP_DATA is injected before this document is rendered.
+// MerekaiBIMAP_DATA is injected before this document is rendered.
 // The fallback keeps the starter useful when opened as a standalone file.
-const extensionData = typeof BIMAP_DATA !== "undefined" ? BIMAP_DATA : {
+const extensionData = typeof MerekaiBIMAP_DATA !== "undefined" ? MerekaiBIMAP_DATA : {
   name: "My Element", type: "zone", attributes: { Example: "value" }
 };
 </script>
@@ -431,7 +431,7 @@ _TEMPLATES = {
 
 
 def _build_data_payload(element: Any, etype: str) -> dict:
-    """Build the complete, stable BIMAP_DATA object for an extension."""
+    """Build the complete, stable MerekaiBIMAP_DATA object for an extension."""
     all_metadata = dict(getattr(element, "metadata", {}) or {})
     hidden = set(getattr(element, "metadata_hidden", []) or [])
 
@@ -494,8 +494,13 @@ def _build_data_payload(element: Any, etype: str) -> dict:
     return payload
 
 
+def _serialize_script_data(payload: Any) -> str:
+    """Serialize JSON safely for embedding inside an HTML script element."""
+    return json.dumps(payload, ensure_ascii=False, indent=2).replace("<", r"\u003c")
+
+
 def launch_extension_in_browser(element: Any, etype: str) -> None:
-    """Inject BIMAP_DATA into the element's extension_html and open in the
+    """Inject MerekaiBIMAP_DATA into the element's extension_html and open in the
     system default browser via a temporary file.
 
     Raises ``ValueError`` if the element has no extension_html set.
@@ -505,8 +510,8 @@ def launch_extension_in_browser(element: Any, etype: str) -> None:
         raise ValueError("No extension configured for this element.")
 
     payload = _build_data_payload(element, etype)
-    data_js = json.dumps(payload, ensure_ascii=False, indent=2)
-    injection = f"<script>\nconst BIMAP_DATA = {data_js};\n</script>\n"
+    data_js = _serialize_script_data(payload)
+    injection = f"<script>\nconst MerekaiBIMAP_DATA = {data_js};\n</script>\n"
 
     # Inject the data block right before </head> or if not found, at the top.
     if "</head>" in html_template:
@@ -548,16 +553,16 @@ class ExtensionEditorDialog(QDialog):
         self._show_onboarding()
 
     def _show_onboarding(self) -> None:
-        """Show a first-use explanation of BIMAP extensions (once per install)."""
-        s = QSettings("BIMAP", "BIMAP")
+        """Show a first-use explanation of MerekaiBIMAP extensions (once per install)."""
+        s = QSettings("MerekaiBIMAP", "MerekaiBIMAP")
         if s.value("extension_editor_intro_shown", False, type=bool):
             return
         s.setValue("extension_editor_intro_shown", True)
         QMessageBox.information(
             self,
-            "BIMAP Extensions",
-            "<b>BIMAP Extensions</b> are HTML5 pages embedded in a zone or keypoint.<br><br>"
-            "At runtime they receive a <code>BIMAP_DATA</code> JavaScript object containing:<br>"
+            "MerekaiBIMAP Extensions",
+            "<b>MerekaiBIMAP Extensions</b> are HTML5 pages embedded in a zone or keypoint.<br><br>"
+            "At runtime they receive a <code>MerekaiBIMAP_DATA</code> JavaScript object containing:<br>"
             "&nbsp;&bull;&nbsp;<b>type</b> — <i>'zone'</i> or <i>'keypoint'</i><br>"
             "&nbsp;&bull;&nbsp;<b>name</b> — element name<br>"
             "&nbsp;&bull;&nbsp;<b>metadata</b> — dict of key→value pairs you defined<br>"
@@ -574,7 +579,7 @@ class ExtensionEditorDialog(QDialog):
         top_row = QHBoxLayout()
         hint = QLabel(
             "Write an HTML5 document. "
-            "<code>BIMAP_DATA</code> is injected as a JS variable with element "
+            "<code>MerekaiBIMAP_DATA</code> is injected as a JS variable with element "
             "data (name, type, metadata, info_card for keypoints)."
         )
         hint.setWordWrap(True)
@@ -594,7 +599,7 @@ class ExtensionEditorDialog(QDialog):
         top_row.addWidget(btn_from_lib)
 
         btn_reference = QPushButton(t("Data Reference"))
-        btn_reference.setToolTip(t("Show BIMAP_DATA fields and JavaScript examples"))
+        btn_reference.setToolTip(t("Show MerekaiBIMAP_DATA fields and JavaScript examples"))
         btn_reference.clicked.connect(self._show_data_reference)
         top_row.addWidget(btn_reference)
 
@@ -635,9 +640,9 @@ class ExtensionEditorDialog(QDialog):
         root.addLayout(btn_row)
 
     def _show_data_reference(self) -> None:
-        """Show the runtime BIMAP_DATA contract and copyable examples."""
+        """Show the runtime MerekaiBIMAP_DATA contract and copyable examples."""
         dialog = QDialog(self)
-        dialog.setWindowTitle(t("BIMAP_DATA Reference"))
+        dialog.setWindowTitle(t("MerekaiBIMAP_DATA Reference"))
         dialog.resize(700, 560)
         layout = QVBoxLayout(dialog)
 
@@ -645,20 +650,20 @@ class ExtensionEditorDialog(QDialog):
         browser.setOpenExternalLinks(False)
         browser.setHtml(
           f"""
-          <h2>BIMAP_DATA</h2>
-          <p>{t("The extension receives the selected zone or keypoint as the global JavaScript object BIMAP_DATA.")}</p>
+          <h2>MerekaiBIMAP_DATA</h2>
+          <p>{t("The extension receives the selected zone or keypoint as the global JavaScript object MerekaiBIMAP_DATA.")}</p>
           <h3>{t("Available fields")}</h3>
           <table cellpadding="5" cellspacing="0" border="1">
             <tr><th>{t("JavaScript")}</th><th>{t("Contents")}</th></tr>
-            <tr><td><code>BIMAP_DATA.type</code></td><td><code>zone</code> {t("or")} <code>keypoint</code></td></tr>
-            <tr><td><code>BIMAP_DATA.id</code></td><td>{t("Object UUID")}</td></tr>
-            <tr><td><code>BIMAP_DATA.name</code></td><td>{t("Object name")}</td></tr>
-            <tr><td><code>BIMAP_DATA.group</code></td><td>{t("Object group")}</td></tr>
-            <tr><td><code>BIMAP_DATA.layer</code></td><td>{t("Map layer")}</td></tr>
-            <tr><td><code>BIMAP_DATA.metadata</code></td><td>{t("Visible custom metadata")}</td></tr>
-            <tr><td><code>BIMAP_DATA.attributes</code></td><td>{t("All metadata and object attributes")}</td></tr>
-            <tr><td><code>BIMAP_DATA.geometry</code></td><td>{t("Geometry type and coordinates")}</td></tr>
-            <tr><td><code>BIMAP_DATA.info_card</code></td><td>{t("Keypoint information card")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.type</code></td><td><code>zone</code> {t("or")} <code>keypoint</code></td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.id</code></td><td>{t("Object UUID")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.name</code></td><td>{t("Object name")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.group</code></td><td>{t("Object group")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.layer</code></td><td>{t("Map layer")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.metadata</code></td><td>{t("Visible custom metadata")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.attributes</code></td><td>{t("All metadata and object attributes")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.geometry</code></td><td>{t("Geometry type and coordinates")}</td></tr>
+            <tr><td><code>MerekaiBIMAP_DATA.info_card</code></td><td>{t("Keypoint information card")}</td></tr>
           </table>
           <h3>{t("Common object attributes")}</h3>
           <p><code>zone_type</code>, <code>width_m</code>, <code>height_m</code>,
@@ -666,7 +671,7 @@ class ExtensionEditorDialog(QDialog):
           <code>lon</code>, <code>icon</code>, <code>icon_color</code>,
           <code>icon_size</code>, {t("and")} <code>keynote_number</code>.</p>
           <h3>{t("JavaScript examples")}</h3>
-          <pre>const data = BIMAP_DATA;
+          <pre>const data = MerekaiBIMAP_DATA;
 
     title.textContent = data.name;
     const status = data.metadata.status || "Unknown";
@@ -683,7 +688,7 @@ class ExtensionEditorDialog(QDialog):
         copy_button = QPushButton(t("Copy JavaScript Example"))
         copy_button.clicked.connect(
           lambda: QApplication.clipboard().setText(
-            "const data = BIMAP_DATA;\n"
+            "const data = MerekaiBIMAP_DATA;\n"
             "const width = Number(data.attributes.width_m || 0);\n"
             "const height = Number(data.attributes.height_m || 0);\n"
             "const status = data.metadata.status || \"Unknown\";"
@@ -762,8 +767,8 @@ class ExtensionEditorDialog(QDialog):
             QMessageBox.warning(self, "Preview", t("HTML content is required."))
             return
         payload = _build_data_payload(self._element, self._etype)
-        data_js = __import__("json").dumps(payload, ensure_ascii=False, indent=2)
-        injection = f"<script>\nconst BIMAP_DATA = {data_js};\n</script>\n"
+        data_js = _serialize_script_data(payload)
+        injection = f"<script>\nconst MerekaiBIMAP_DATA = {data_js};\n</script>\n"
         if "</head>" in html:
             rendered = html.replace("</head>", injection + "</head>", 1)
         else:

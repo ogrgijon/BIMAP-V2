@@ -1,4 +1,4 @@
-"""Shared reusable Qt widgets for the BIMAP UI."""
+"""Shared reusable Qt widgets for the MerekaiBIMAP UI."""
 
 from __future__ import annotations
 

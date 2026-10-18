@@ -67,10 +67,12 @@ class TileWidget(QWidget):
     coordinates_changed = pyqtSignal(float, float)
     context_action_requested = pyqtSignal(str, str, str)    # action, etype, eid
     multi_select_finished = pyqtSignal(list)
+    selection_box_finished = pyqtSignal(list)
     element_move_dropped = pyqtSignal(str, str, float, float)
     add_annotation_requested = pyqtSignal(str, float, float)  # ann_type, lat, lon
     open_extension_requested = pyqtSignal(str, str)           # etype, eid
     element_rotated = pyqtSignal(str, str, float)             # etype, eid, degrees
+    zone_vertices_changed = pyqtSignal(str, object)            # zone_id, coordinates
     network_status_changed = pyqtSignal(bool)                 # True = online, False = offline
     data_feature_selected = pyqtSignal(str, int)              # source_id, row_index
     tool_changed = pyqtSignal(str)                            # effective ToolMode value
@@ -116,9 +118,11 @@ class TileWidget(QWidget):
         self._interaction.draw_finished.connect(self._on_draw_finished)
         self._interaction.element_selected.connect(self.element_selected)
         self._interaction.multi_select_finished.connect(self.multi_select_finished)
+        self._interaction.selection_box_finished.connect(self.selection_box_finished)
         self._interaction.element_move_dropped.connect(self.element_move_dropped)
         self._interaction.open_extension_requested.connect(self.open_extension_requested)
         self._interaction.element_rotated.connect(self.element_rotated)
+        self._interaction.zone_vertices_changed.connect(self.zone_vertices_changed)
 
         # Drag state
         self._drag_start: QPoint | None = None
@@ -150,6 +154,10 @@ class TileWidget(QWidget):
             project.map_state.zoom,
         )
         self.set_tile_provider(project.map_state.tile_provider)
+
+    def set_multi_selected(self, items: list[tuple[str, str]]) -> None:
+        """Highlight elements selected together in the layers panel."""
+        self._interaction.set_multi_selected(items)
 
     def set_viewport(self, lat: float, lon: float, zoom: int) -> None:
         self._center_lat = lat
@@ -239,7 +247,7 @@ class TileWidget(QWidget):
 
     def hit_test_data_layers(self, px: float, py: float) -> tuple[str, int] | None:
         """Check if the given pixel coordinates hit any visible data layer feature.
-        
+
         Returns (source_id, row_index) of the hit feature, or None.
         """
         return self._overlay.hit_test_data_feature(px, py)
@@ -274,12 +282,15 @@ class TileWidget(QWidget):
             ToolMode.SELECT: Qt.CursorShape.ArrowCursor,
             ToolMode.PAN: Qt.CursorShape.OpenHandCursor,
             ToolMode.DRAW_POLYGON: Qt.CursorShape.CrossCursor,
+            ToolMode.DRAW_LINE: Qt.CursorShape.CrossCursor,
+            ToolMode.DRAW_POLYLINE: Qt.CursorShape.CrossCursor,
             ToolMode.DRAW_RECTANGLE: Qt.CursorShape.CrossCursor,
             ToolMode.DRAW_CIRCLE: Qt.CursorShape.CrossCursor,
             ToolMode.DRAW_KEYPOINT: Qt.CursorShape.CrossCursor,
             ToolMode.DRAW_TEXT: Qt.CursorShape.IBeamCursor,
             ToolMode.MAGIC_WAND: Qt.CursorShape.CrossCursor,
             ToolMode.MOVE_ELEMENT: Qt.CursorShape.SizeAllCursor,
+            ToolMode.EDIT_VERTICES: Qt.CursorShape.CrossCursor,
             ToolMode.ROTATE_ELEMENT: Qt.CursorShape.CrossCursor,
             ToolMode.MEASURE: Qt.CursorShape.CrossCursor,
             ToolMode.DIMENSION: Qt.CursorShape.CrossCursor,
@@ -677,12 +688,29 @@ class TileWidget(QWidget):
             return
         hit_type, hit_id = self._hit_test(float(pos.x()), float(pos.y()))
         menu = QMenu(self)
+        selected = self._interaction.multi_selected
+        selected_lines = [
+            (etype, eid) for etype, eid in selected
+            if etype == "zone"
+            and self._project
+            and any(
+                str(z.id) == eid
+                and getattr(z.zone_type, "value", z.zone_type) == "line"
+                for z in self._project.zones
+            )
+        ]
+        act_fuse = None
+        if len(selected_lines) >= 2 and len(selected_lines) == len(selected):
+            act_fuse = menu.addAction(t("Fuse Selected Lines"))
+            menu.addSeparator()
         if not hit_type:
             # Empty canvas — offer text annotation creation at this position
             act_text = menu.addAction(t("📝  Add Text here"))
             chosen = menu.exec(event.globalPos())
             lat, lon = self.px_to_lat_lon(float(pos.x()), float(pos.y()))
-            if chosen == act_text:
+            if act_fuse is not None and chosen == act_fuse:
+                self.context_action_requested.emit("fuse", "", "")
+            elif chosen == act_text:
                 self.add_annotation_requested.emit("text_box", lat, lon)
             return
         # Check if this element has an extension defined
@@ -719,7 +747,9 @@ class TileWidget(QWidget):
         menu.addSeparator()
         act_remove   = menu.addAction(t("🗑  Remove…"))
         chosen = menu.exec(event.globalPos())
-        if chosen == act_remove:
+        if act_fuse is not None and chosen == act_fuse:
+            self.context_action_requested.emit("fuse", "", "")
+        elif chosen == act_remove:
             self.context_action_requested.emit("remove", hit_type, hit_id)
         elif chosen == act_edit:
             self.context_action_requested.emit("edit", hit_type, hit_id)

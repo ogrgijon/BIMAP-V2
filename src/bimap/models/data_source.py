@@ -15,6 +15,7 @@ class SourceType(StrEnum):
     REST_API = "rest_api"
     GOOGLE_SHEETS = "gsheets"
     GEOJSON = "geojson"
+    GEOPACKAGE = "geopackage"
     WFS = "wfs"
     WMS = "wms"
 

@@ -1,36 +1,37 @@
 <div align="center">
 
-# BIMAP
+<img src="logo_icon.png" alt="MerekaiBIMAP logo" width="108">
+
+# MerekaiBIMAP
 ### Business Intelligence Map Designer
 
 [English](readme.md) | [Español](README.es.md)
 
-**Turn your data into presentation-quality PDF maps — no GIS expertise required.**
+**Turn location data into clear, presentation-ready maps — without the GIS learning curve.**
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.6%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
-![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen)
 
-[Get Started](#-quick-start) · [User Manual](MANUAL.md) · [Architecture](docs/ARCHITECTURE.md) · [Extensions](docs/EXTENSIONS.md)
+[Quick Start Guide](docs/QUICK_START.md) · [Install](docs/INSTALL.md) · [Full Manual](MANUAL.md) · [Browse releases](https://github.com/ogrgijon/BIMAP-V2/releases)
 
 <br/>
 
-![BIMAP Screenshot](bimap_splash.png)
+<img src="bimap_splash.png" alt="MerekaiBIMAP — business intelligence map designer" width="500">
 
 </div>
 
 ---
 
-## What is BIMAP?
+## What is MerekaiBIMAP?
 
-BIMAP is a **Python desktop application** that lets analysts, consultants, and operations teams design data-driven maps and export them as polished PDF documents — all without touching a GIS tool or a web service.
+MerekaiBIMAP helps teams turn business data into maps people can understand and act on. Bring together spreadsheets, databases, APIs, or live feeds; shape the story on an interactive map; then share a polished PDF with clients and colleagues.
 
-Draw territories. Connect your data. Export a PDF. Done.
+**Plan territories. See performance by location. Deliver a map that is ready to present.**
 
 ---
 
-## Who is it for?
+## Made for location-driven decisions
 
 | Role | How they use it |
 |------|----------------|
@@ -39,6 +40,14 @@ Draw territories. Connect your data. Export a PDF. Done.
 | **Operations Manager** | Logistics routes, warehouse coverage, fleet tracking |
 | **Real Estate** | Property portfolios and zoning overlays |
 | **Marketing** | Campaign reach maps and demographic zones |
+
+## From data to a decision-ready map
+
+1. **Start with your place** — find an address or choose a basemap.
+2. **Build the story** — draw territories, add locations, labels, and business data.
+3. **Present with confidence** — arrange the page, add a title and legend, and export a shareable PDF.
+
+New to the app? Follow the [Quick Start Guide](docs/QUICK_START.md) to create your first map.
 
 ---
 
@@ -81,6 +90,10 @@ Download tile caches for any region and zoom range. The app works fully offline 
 
 ## ⚡ Quick Start
 
+For the step-by-step in-app workflow, see the [Quick Start Guide](docs/QUICK_START.md).
+
+### Run from source
+
 ```bash
 # 1. Clone and enter the project
 git clone https://github.com/ogrgijon/BIMAP-V2.git
@@ -106,6 +119,7 @@ python -m bimap.app
 
 | Document | Description |
 |----------|-------------|
+| [docs/QUICK_START.md](docs/QUICK_START.md) | Short, practical guide to creating and exporting your first map |
 | [MANUAL.md](MANUAL.md) | Complete user manual — all features, panels, shortcuts |
 | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | HTML5 widget extensions — `BIMAP_DATA` reference and templates |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, tech stack, project structure, design decisions |
@@ -131,11 +145,9 @@ python -m bimap.app
 
 ---
 
-## ⚠️ Disclaimer
+## ⚠️ Project status & safety
 
-This project is an **experimental research prototype**, shared for learning and collaboration.  
-It is **not production-ready** and carries no warranty.  
-Do not store production credentials in `.bimap` project files.
+MerekaiBIMAP is an experimental research project shared for learning and collaboration; it is not production-ready and carries no warranty. Do not store production credentials in `.bimap` project files. Open only projects and HTML/JavaScript extensions from trusted sources; extensions execute when viewed.
 
 See [docs/INSTALL.md](docs/INSTALL.md#security-notes) for the full security note.
 
@@ -145,4 +157,3 @@ See [docs/INSTALL.md](docs/INSTALL.md#security-notes) for the full security note
 
 MIT License — see [LICENSE](LICENSE).  
 Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) — [ODbL](https://opendatacommons.org/licenses/odbl/).
-

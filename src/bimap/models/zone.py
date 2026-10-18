@@ -12,6 +12,7 @@ from bimap.models.style import ZoneLabel, ZoneStyle
 
 class ZoneType(StrEnum):
     POLYGON = "polygon"
+    LINE = "line"
     RECTANGLE = "rectangle"
     CIRCLE = "circle"
 
@@ -32,7 +33,7 @@ class DataBinding(BaseModel):
 class MetadataKeyBinding(BaseModel):
     """Link a metadata key's value to a column in a registered DataSource.
 
-    When the data source refreshes, BIMAP resolves the bound rows and
+    When the data source refreshes, MerekaiBIMAP resolves the bound rows and
     overwrites the metadata key with the aggregated column value.
     """
     source_id: str              # UUID str of the DataSource
@@ -56,7 +57,7 @@ class Zone(BaseModel):
     label: ZoneLabel = Field(default_factory=ZoneLabel)
     data_binding: DataBinding | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
-    metadata_hidden: list[str] = Field(default_factory=list)           # keys hidden from BIMAP_DATA
+    metadata_hidden: list[str] = Field(default_factory=list)           # keys hidden from MerekaiBIMAP_DATA
     metadata_bindings: dict[str, MetadataKeyBinding] = Field(default_factory=dict)  # key → source binding
     locked: bool = False              # locked zones cannot be selected/moved
     layer: str = "Default"

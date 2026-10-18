@@ -1,4 +1,4 @@
-"""Simple EN/ES translation support for BIMAP.
+"""Simple EN/ES translation support for MerekaiBIMAP.
 
 Usage
 -----
@@ -43,6 +43,18 @@ _ES: dict[str, str] = {
     "Redo": "Rehacer",
     "Delete Selected": "Eliminar Seleccionado",
     "Draw Polygon Zone": "Dibujar Zona Polígono",
+    "Draw Line": "Dibujar Línea",
+    "Draw Polyline": "Dibujar polilínea",
+    "Fuse Selected Lines": "Fusionar líneas seleccionadas",
+    "Select at least two lines first.": "Seleccione primero al menos dos líneas.",
+    "Selected lines are too far apart to join.": "Las líneas seleccionadas están demasiado separadas para unirlas.",
+    "Fused Polyline": "Polilínea fusionada",
+    "Export Elements…": "Exportar elementos…",
+    "Import Elements…": "Importar elementos…",
+    "Exportar": "Exportar",
+    "Importar": "Importar",
+    "Format": "Formato",
+    "GeoPackage project import is not available yet; use it as a data source layer.": "La importación de proyectos GeoPackage aún no está disponible; úselo como capa de datos.",
     "Draw Rectangle Zone": "Dibujar Zona Rectángulo",
     "Draw Circle Zone": "Dibujar Zona Círculo",
     "Place Keypoint": "Colocar Punto Clave",
@@ -161,13 +173,13 @@ _ES: dict[str, str] = {
     "Lasso Selector": "Selector de Lazo",
 
     # ── Help menu ────────────────────────────────────────────────────────────
-    "About BIMAP": "Acerca de BIMAP",
+    "About MerekaiBIMAP": "Acerca de MerekaiBIMAP",
     "Language": "Idioma",
     "English": "English",
     "Spanish": "Español",
     "Restart required": "Reinicio requerido",
-    "Language changed. Please restart BIMAP to apply.": (
-        "Idioma cambiado. Por favor reinicie BIMAP para aplicar."
+    "Language changed. Please restart MerekaiBIMAP to apply.": (
+        "Idioma cambiado. Por favor reinicie MerekaiBIMAP para aplicar."
     ),
 
     # ── Toolbar tooltips ─────────────────────────────────────────────────────
@@ -178,6 +190,13 @@ _ES: dict[str, str] = {
         "Rotar zona (clic en zona, luego ↑/↓ para rotar 1° a la vez)"
     ),
     "Move element (click to pick, click to drop)": "Mover elemento (clic para seleccionar, clic para soltar)",
+    "Edit zone vertices (drag handles; double-click a segment to add; Delete removes)": (
+        "Editar vértices de zona (arrastre los controles; doble clic en un segmento para añadir; Supr elimina)"
+    ),
+    "Edit Vertices": "Editar vértices",
+    "Drag vertices; double-click a segment to add one; select a vertex and press Delete to remove it.": (
+        "Arrastre los vértices; doble clic en un segmento para añadir uno; seleccione un vértice y pulse Supr para eliminarlo."
+    ),
     "Rotation angle — type a value or use ↑/↓ on the map": (
         "Ángulo de rotación — escriba un valor o use ↑/↓ en el mapa"
     ),
@@ -186,6 +205,14 @@ _ES: dict[str, str] = {
     ),
     "Lasso: area-select to batch remove": "Zona Dinámica: selección de área para eliminar en lote",
     "Draw polygon zone": "Dibujar zona polígono",
+    "Draw line": "Dibujar línea",
+    "Draw line (click start, click end)": "Dibujar línea (haga clic en el inicio y después en el final)",
+    "Draw polyline (click points, double-click to finish)": "Dibujar polilínea (haga clic en los puntos y doble clic para finalizar)",
+    "Solid": "Continua",
+    "Dashed": "Discontinua",
+    "Dotted": "Punteada",
+    "Line Type": "Tipo de línea",
+    "Line pattern": "Patrón de línea",
     "Draw rectangle zone": "Dibujar zona rectángulo",
     "Draw circle zone": "Dibujar zona círculo",
     "Place keypoint marker": "Colocar marcador de punto clave",
@@ -295,6 +322,10 @@ _ES: dict[str, str] = {
     "Search location…": "Buscar ubicación…",
     "Search location (Enter)": "Buscar ubicación (Enter)",
     "Search": "Buscar",
+    "Search map attributes…": "Buscar atributos del mapa…",
+    "Search map attributes and element values": "Buscar atributos y valores de elementos del mapa",
+    "Keypoint": "Punto clave",
+    "Feature": "Entidad",
     "  Map: ": "  Mapa: ",
     "Tile provider": "Proveedor de mosaicos",
     "Zoom in  [ + ]": "Acercar  [ + ]",
@@ -440,7 +471,7 @@ _ES: dict[str, str] = {
         "<p>Indica la ruta de salida para PDF. <b>Imprimir</b> envía el diseño a la impresora y <b>Exportar PDF</b> crea el archivo.</p>"
     ),
     "Debug Log window help": (
-        "<h2>Registro de depuración</h2><p>Muestra los mensajes de registro capturados durante la ejecución de BIMAP.</p>"
+        "<h2>Registro de depuración</h2><p>Muestra los mensajes de registro capturados durante la ejecución de MerekaiBIMAP.</p>"
         "<p>Usa <b>Actualizar</b> para cargar los mensajes recientes, <b>Limpiar</b> para vaciar el registro en memoria y <b>Copiar todo</b> para compartirlo al diagnosticar un problema.</p>"
     ),
     "Element Editor window help": (
@@ -457,7 +488,7 @@ _ES: dict[str, str] = {
     ),
     "Extension Viewer window help": (
         "<h2>Visor de extensiones</h2><p>Renderiza la extensión del elemento seleccionado con sus datos actuales.</p>"
-        "<p>Usa <b>Recargar</b> después de cambiar los datos. <b>Abrir en navegador</b> permite consultar el mismo contenido fuera de BIMAP.</p>"
+        "<p>Usa <b>Recargar</b> después de cambiar los datos. <b>Abrir en navegador</b> permite consultar el mismo contenido fuera de MerekaiBIMAP.</p>"
     ),
     "Metadata Viewer window help": (
         "<h2>Visor de metadatos</h2><p>Muestra los pares clave-valor guardados como información adicional del elemento.</p>"
@@ -853,10 +884,10 @@ _ES: dict[str, str] = {
     "Preview": "Vista previa",
     "Render the selected extension with sample data": "Renderizar la extensión seleccionada con datos de ejemplo",
     "Data Reference": "Referencia de datos",
-    "Show BIMAP_DATA fields and JavaScript examples": "Mostrar campos BIMAP_DATA y ejemplos JavaScript",
-    "BIMAP_DATA Reference": "Referencia de BIMAP_DATA",
+    "Show MerekaiBIMAP_DATA fields and JavaScript examples": "Mostrar campos MerekaiBIMAP_DATA y ejemplos JavaScript",
+    "MerekaiBIMAP_DATA Reference": "Referencia de MerekaiBIMAP_DATA",
     "Copy JavaScript Example": "Copiar ejemplo JavaScript",
-    "The extension receives the selected zone or keypoint as the global JavaScript object BIMAP_DATA.": "La extensión recibe la zona o punto clave seleccionado como el objeto JavaScript global BIMAP_DATA.",
+    "The extension receives the selected zone or keypoint as the global JavaScript object MerekaiBIMAP_DATA.": "La extensión recibe la zona o punto clave seleccionado como el objeto JavaScript global MerekaiBIMAP_DATA.",
     "Available fields": "Campos disponibles",
     "JavaScript": "JavaScript",
     "Contents": "Contenido",
@@ -1140,7 +1171,7 @@ _EN_HELP: dict[str, str] = {
         "<p>Set an output path for PDF. <b>Print</b> sends the layout to a printer and <b>Export PDF</b> creates the file.</p>"
     ),
     "Debug Log window help": (
-        "<h2>Debug log</h2><p>Shows log messages captured while BIMAP is running.</p>"
+        "<h2>Debug log</h2><p>Shows log messages captured while MerekaiBIMAP is running.</p>"
         "<p>Use <b>Refresh</b> to load recent messages, <b>Clear</b> to empty the in-memory log, and <b>Copy All</b> to share it when diagnosing a problem.</p>"
     ),
     "Element Editor window help": (
@@ -1157,7 +1188,7 @@ _EN_HELP: dict[str, str] = {
     ),
     "Extension Viewer window help": (
         "<h2>Extension Viewer</h2><p>Renders the selected element's extension with its current data.</p>"
-        "<p>Use <b>Reload</b> after changing data. <b>Open in Browser</b> lets you inspect the same content outside BIMAP.</p>"
+        "<p>Use <b>Reload</b> after changing data. <b>Open in Browser</b> lets you inspect the same content outside MerekaiBIMAP.</p>"
     ),
     "Metadata Viewer window help": (
         "<h2>Metadata Viewer</h2><p>Shows the key-value pairs stored as additional information for the element.</p>"

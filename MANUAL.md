@@ -1,8 +1,10 @@
-# BIMAP — User Manual
+# MerekaiBIMAP — User Manual
 
-**Version 0.3.0 · March 2026**
+**Version 2.1.0 · March 2026**
 
-> BIMAP is a Python + PyQt6 desktop application for designing presentation-quality PDF maps enriched with business data. It unifies map design, geospatial data integration, and professional export in a single workflow.
+> MerekaiBIMAP is a Python + PyQt6 desktop application for designing presentation-quality PDF maps enriched with business data. It unifies map design, geospatial data integration, and professional export in a single workflow.
+
+![MerekaiBIMAP desktop interface](screenshot1.png)
 
 ---
 
@@ -43,7 +45,7 @@
 ```bash
 # Clone repository
 git clone https://github.com/ogrgijon/BIMAP-V2.git
-cd BIMAP
+cd BIMAP-V2
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -60,7 +62,7 @@ pip install -e .
 python -m bimap.app
 ```
 
-On first launch, BIMAP creates the following directories in your home folder:
+On first launch, MerekaiBIMAP creates the following directories in your home folder:
 
 | Path | Purpose |
 |------|---------|
@@ -73,7 +75,7 @@ On first launch, BIMAP creates the following directories in your home folder:
 - Python 3.11+
 - PyQt6
 - Internet connection (for tile downloads and geocoding)
-- BIMAP works offline using cached tiles once downloaded
+- MerekaiBIMAP works offline using cached tiles once downloaded
 
 ---
 
@@ -135,7 +137,7 @@ Projects are saved as `.bimap` files (JSON format).
 
 ### Auto-Save
 
-BIMAP auto-saves the current project every 5 minutes by default. The interval is configurable in **Preferences → Autosave interval**.
+MerekaiBIMAP auto-saves the current project every 5 minutes by default. The interval is configurable in **Preferences → Autosave interval**.
 
 ### Backup & Transfer
 
@@ -169,7 +171,7 @@ Use the **tile provider dropdown** in the search bar to switch between:
 
 ### Location Search
 
-Type an address in the **🔍 Search location…** bar and press Enter. BIMAP geocodes via Nominatim (OpenStreetMap) and pans the map to the result.
+Type an address in the **🔍 Search location…** bar and press Enter. MerekaiBIMAP geocodes via Nominatim (OpenStreetMap) and pans the map to the result.
 
 Alternatively use **Map → Search Location…** (Ctrl+F) or **Map → Place by Coordinates…** (Ctrl+G) to jump to specific lat/lon coordinates.
 
@@ -200,6 +202,7 @@ Select a tool from the **Tool Bar** or the **Edit** menu:
 | Place Keypoint | Ctrl+Shift+K | Click once to drop a pin |
 | Place Text Annotation | Ctrl+Shift+T | Click once to place a text box |
 | Magic Wand (Lasso) | — | Drag boundary to select multiple zones in bulk |
+| Edit Vertices | V | Right-click a zone and choose Edit, or select this tool and click a zone |
 | Rotate Element | — | Select a rectangle zone, then use ↑/↓ keys or rotation field |
 | Measure | M | Click points to measure distances and area |
 
@@ -207,7 +210,9 @@ Select a tool from the **Tool Bar** or the **Edit** menu:
 
 - **Select** — Click element to open it in the Properties panel
 - **Move** — Click and drag a selected element to a new position
+- **Edit vertices** — In Edit Vertices mode, drag a handle to move it, double-click a segment to insert a vertex, or select a handle and press Delete to remove it (lines keep at least two points; closed shapes keep at least three). Editing a rectangle converts it to a freeform polygon.
 - **Rotate** (rectangles only) — Select, then press ↑/↓ or type angle in properties
+- **Fuse lines** — Select two or more line/polyline zones and no other element types, then right-click the map or a selected Layers row and choose **Fuse Selected Lines**.
 - **Delete** — Select element and press Delete, or right-click → Delete
 
 ### Bulk Operations (Lasso)
@@ -491,7 +496,7 @@ Transform expressions support: arithmetic (`+`, `-`, `*`, `/`, `**`, `//`, `%`),
 
 ## 12. Data Sources
 
-BIMAP can connect to external data to automatically update zone styles and metadata.
+MerekaiBIMAP can connect to external data to automatically update zone styles and metadata.
 
 ### Opening Data Sources Panel
 
@@ -577,7 +582,7 @@ Data → Live Feeds → add_live_feed…
 
 ### Feed Presets
 
-BIMAP includes built-in presets for common feeds:
+MerekaiBIMAP includes built-in presets for common feeds:
 
 - International Space Station (ISS)
 - Commercial Flights (OpenSky Network)
@@ -665,6 +670,10 @@ Zones and keypoints can have a custom HTML5/CSS/JavaScript widget attached.
 
 Click **Open Viewer** in the Metadata tab to open the HTML component in an interactive modal window.
 
+> **Security:** HTML/JavaScript extensions execute when previewed or viewed and may send
+> data available to the extension over the network. Open only projects and extensions
+> from sources you trust.
+
 ---
 
 ## 15. Style Presets
@@ -748,7 +757,7 @@ The delimitation feature fetches an administrative boundary from OpenStreetMap a
 
 1. **Map → Set Delimitation…**
 2. Enter a place name (country, region, city, postal code, etc.)
-3. BIMAP queries Nominatim and draws the boundary polygon
+3. MerekaiBIMAP queries Nominatim and draws the boundary polygon
 
 ### Clearing a Delimitation
 
@@ -767,7 +776,7 @@ Download tiles for a specific region and zoom range so the map works without an 
 3. Select the zoom level range (e.g., 10–16)
 4. Click **Download**
 
-BIMAP stores tiles in `~/.bimap/tile_cache/`. Downloads may take several minutes for large areas or high zoom levels.
+MerekaiBIMAP stores tiles in `~/.bimap/tile_cache/`. Downloads may take several minutes for large areas or high zoom levels.
 
 When the app detects no internet connection, it automatically uses cached tiles.
 
@@ -916,7 +925,7 @@ Optional text block with free description, title, and author, placed above or be
 | `map_state` | Last viewport (centre, zoom, rotation, tile provider) |
 | `bookmarks` | Saved viewports |
 
-> ⚠️ **Security note:** Project files are plaintext JSON. Do not store database passwords or API tokens in projects shared with untrusted recipients.
+> ⚠️ **Security note:** Project files are plaintext JSON. Do not store database passwords or API tokens in projects shared with untrusted recipients. HTML/JavaScript extensions execute when viewed, so only open projects and extensions from sources you trust.
 
 ### Backup File (`.bimap.zip`)
 
@@ -948,7 +957,7 @@ Designed for transferring complete projects between workstations.
 1. Navigate to the target region
 2. **Map → Offline Map…** — download tiles for zoom levels 8–16
 3. Disconnect from internet
-4. BIMAP continues working with cached tiles
+4. MerekaiBIMAP continues working with cached tiles
 
 ### Sharing a Project
 
@@ -956,4 +965,4 @@ Use **File → Export Data Backup…** to create a `.bimap.zip` that includes th
 
 ---
 
-*BIMAP is an open-source research prototype. Contributions and bug reports are welcome at [github.com/ogrgijon/BIMAP](https://github.com/ogrgijon/BIMAP).*
+*MerekaiBIMAP is an open-source research prototype. Contributions and bug reports are welcome at [github.com/ogrgijon/BIMAP](https://github.com/ogrgijon/BIMAP).*

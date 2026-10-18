@@ -1,4 +1,4 @@
-"""BIMAP – Business Intelligence Map Designer."""
+"""MerekaiBIMAP – Business Intelligence Map Designer."""
 
 from bimap.config import APP_NAME, APP_VERSION
 

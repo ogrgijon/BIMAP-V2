@@ -7,9 +7,9 @@ from dataclasses import dataclass as _dataclass
 from pathlib import Path
 
 # ── Application ──────────────────────────────────────────────────────────────
-APP_NAME = "BIMAP"
-APP_VERSION = "2.0.0"
-APP_ORGANISATION = "BIMAP"
+APP_NAME = "MerekaiBIMAP"
+APP_VERSION = "2.1.0"
+APP_ORGANISATION = "MerekaiBIMAP"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 HOME_DIR: Path = Path.home()
@@ -60,7 +60,7 @@ DEFAULT_TILE_PROVIDER: str = "osm_standard"
 
 # ── HTTP Headers (OSM usage policy requires a meaningful User-Agent) ─────────
 HTTP_HEADERS: dict[str, str] = {
-    "User-Agent": f"{APP_NAME}/{APP_VERSION} (https://github.com/ogrgijon/BIMAP)",
+    "User-Agent": f"{APP_NAME}/{APP_VERSION} (https://github.com/ogrgijon/MerekaiBIMAP)",
     "Accept": "image/png,image/*,*/*",
 }
 

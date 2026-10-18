@@ -35,12 +35,15 @@ class ToolMode(StrEnum):
     SELECT = "select"
     PAN = "pan"
     DRAW_POLYGON = "draw_polygon"
+    DRAW_LINE = "draw_line"
+    DRAW_POLYLINE = "draw_polyline"
     DRAW_RECTANGLE = "draw_rectangle"
     DRAW_CIRCLE = "draw_circle"
     DRAW_KEYPOINT = "draw_keypoint"
     DRAW_TEXT = "draw_text"
     MAGIC_WAND = "magic_wand"
     MOVE_ELEMENT = "move_element"
+    EDIT_VERTICES = "edit_vertices"
     ROTATE_ELEMENT = "rotate_element"
     MEASURE = "measure"
     DIMENSION = "dimension"
@@ -102,7 +105,9 @@ class InteractionHandler(QObject):
     draw_finished = pyqtSignal(str, object)           # element_type, model_object
     element_selected = pyqtSignal(str, str)           # element_type, id string
     multi_select_finished = pyqtSignal(list)          # list[(etype, eid)]
+    selection_box_finished = pyqtSignal(list)
     element_move_dropped = pyqtSignal(str, str, float, float)  # etype, eid, lat, lon
+    zone_vertices_changed = pyqtSignal(str, object)  # zone_id, replacement coordinates
     open_extension_requested = pyqtSignal(str, str)   # element_type, element_id
     element_rotated = pyqtSignal(str, str, float)     # etype, eid, new_degrees
 
@@ -114,6 +119,8 @@ class InteractionHandler(QObject):
         # Rectangle drag state
         self._rect_start: QPointF | None = None
         self._rect_end: QPointF | None = None
+        self._line_start: QPointF | None = None
+        self._line_end: QPointF | None = None
         # Circle drag state
         self._circle_center: QPointF | None = None
         self._circle_edge: QPointF | None = None
@@ -127,12 +134,19 @@ class InteractionHandler(QObject):
         self._lasso_active: bool = False
         self._multi_selected: list[tuple[str, str]] = []
         self._lasso_zone: "Zone | None" = None  # polygon built from last lasso
+        self._select_rect_start: QPointF | None = None
+        self._select_rect_end: QPointF | None = None
         # Move-element state
         self._move_element_type: str | None = None
         self._move_element_id: str | None = None
         self._move_dragging = False
         # Precision-move preview pixel (set by arrow-key nudge, cleared on mouse move)
         self._move_preview_px: QPointF | None = None
+        self._vertex_edit_zone_id: str | None = None
+        self._vertex_drag_index: int | None = None
+        self._vertex_drag_start_px: QPointF | None = None
+        self._vertex_drag_px: QPointF | None = None
+        self._vertex_selected_index: int | None = None
         # Rotate-element state
         self._rotate_element_type: str | None = None
         self._rotate_element_id: str | None = None
@@ -166,13 +180,40 @@ class InteractionHandler(QObject):
 
     def set_selected(self, element_type: str, element_id: str) -> None:
         """Programmatically select an element and request a repaint."""
+        self._multi_selected.clear()
         self._selected_type = element_type
         self._selected_id = element_id
+        self.request_repaint.emit()
+
+    def set_multi_selected(self, items: list[tuple[str, str]]) -> None:
+        """Set the elements highlighted as a multi-selection."""
+        self._multi_selected = list(items)
+        self._selected_type = None
+        self._selected_id = None
+        self.request_repaint.emit()
+
+    def _finish_polyline(self, canvas: "TileWidget") -> None:
+        if len(self._polygon_pts) < 2:
+            return
+        coords = [LatLon(lat=canvas.px_to_lat_lon(p.x(), p.y())[0],
+                         lon=canvas.px_to_lat_lon(p.x(), p.y())[1]) for p in self._polygon_pts]
+        self._polygon_pts.clear()
+        zone = Zone(zone_type=ZoneType.LINE, coordinates=coords, name=t("New Polyline"))
+        zone.label.text = zone.name
+        self.draw_finished.emit("zone", zone)
         self.request_repaint.emit()
 
     def set_tool(self, mode: ToolMode) -> None:
         self._tool = mode
         self._reset_draw_state()
+
+    def set_vertex_edit_zone(self, zone_id: str) -> None:
+        self._vertex_edit_zone_id = zone_id
+        self._vertex_drag_index = None
+        self._vertex_drag_start_px = None
+        self._vertex_drag_px = None
+        self._vertex_selected_index = None
+        self.request_repaint.emit()
 
     @property
     def multi_selected(self) -> list[tuple[str, str]]:
@@ -182,16 +223,24 @@ class InteractionHandler(QObject):
         self._polygon_pts.clear()
         self._rect_start = None
         self._rect_end = None
+        self._line_start = None
+        self._line_end = None
         self._circle_center = None
         self._circle_edge = None
         self._lasso_pts.clear()
         self._lasso_active = False
-        self._multi_selected.clear()
         self._lasso_zone = None
+        self._select_rect_start = None
+        self._select_rect_end = None
         self._move_element_type = None
         self._move_element_id = None
         self._move_dragging = False
         self._move_preview_px = None
+        self._vertex_edit_zone_id = None
+        self._vertex_drag_index = None
+        self._vertex_drag_start_px = None
+        self._vertex_drag_px = None
+        self._vertex_selected_index = None
         self._rotate_element_type = None
         self._rotate_element_id = None
         self._rotate_center_latlon = None
@@ -218,6 +267,19 @@ class InteractionHandler(QObject):
                 self._rect_start = QPointF(pos)
                 self._rect_end = QPointF(pos)
 
+            case ToolMode.DRAW_LINE:
+                if self._line_start is None:
+                    self._line_start = QPointF(pos)
+                    self._line_end = QPointF(pos)
+                    self.request_repaint.emit()
+                else:
+                    self._line_end = QPointF(pos)
+                    self._finish_line(canvas)
+
+            case ToolMode.DRAW_POLYLINE:
+                self._polygon_pts.append(QPointF(pos))
+                self.request_repaint.emit()
+
             case ToolMode.DRAW_CIRCLE:
                 self._circle_center = QPointF(pos)
                 self._circle_edge = QPointF(pos)
@@ -240,7 +302,29 @@ class InteractionHandler(QObject):
                 self.draw_finished.emit("annotation", ann)
 
             case ToolMode.SELECT:
-                self._try_select(pos, canvas)
+                if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                    self._toggle_select_at(pos, canvas)
+                else:
+                    self._select_rect_start = QPointF(pos)
+                    self._select_rect_end = QPointF(pos)
+
+            case ToolMode.EDIT_VERTICES:
+                hit_type, hit_id = canvas._hit_test(pos.x(), pos.y())
+                if hit_type == "zone" and hit_id != self._vertex_edit_zone_id:
+                    self._vertex_edit_zone_id = hit_id
+                    self._vertex_selected_index = None
+                    self.element_selected.emit("zone", hit_id)
+                zone = self._vertex_edit_zone(canvas)
+                if zone is not None:
+                    nearest_index, distance = self._nearest_vertex_index(pos, zone, canvas)
+                    if nearest_index is not None and distance <= 12:
+                        self._vertex_selected_index = nearest_index
+                        self._vertex_drag_index = nearest_index
+                        self._vertex_drag_start_px = QPointF(pos)
+                        self._vertex_drag_px = QPointF(pos)
+                    else:
+                        self._vertex_selected_index = None
+                self.request_repaint.emit()
 
             case ToolMode.MAGIC_WAND:
                 self._lasso_pts = [QPointF(pos)]
@@ -313,6 +397,9 @@ class InteractionHandler(QObject):
             case ToolMode.DRAW_RECTANGLE if self._rect_start:
                 self._rect_end = QPointF(event.position())
                 self.request_repaint.emit()
+            case ToolMode.DRAW_LINE if self._line_start:
+                self._line_end = QPointF(event.position())
+                self.request_repaint.emit()
             case ToolMode.DRAW_CIRCLE if self._circle_center:
                 self._circle_edge = QPointF(event.position())
                 self.request_repaint.emit()
@@ -338,14 +425,29 @@ class InteractionHandler(QObject):
                         self._rotate_current_deg = (self._rotate_drag_start_deg + delta) % 360.0
                         self.request_repaint.emit()
             case ToolMode.SELECT:
+                if self._select_rect_start:
+                    self._select_rect_end = QPointF(event.position())
+                    self.request_repaint.emit()
                 # Trigger hover tooltip after a short delay
                 self._hover_pos = QPointF(event.position())
                 self._hover_canvas = canvas
                 self._hover_timer.start(200)  # 200ms debounce
+            case ToolMode.EDIT_VERTICES if self._vertex_drag_index is not None:
+                if event.buttons() & Qt.MouseButton.LeftButton:
+                    self._vertex_drag_px = QPointF(event.position())
+                    self.request_repaint.emit()
 
     def mouse_release(self, event: QMouseEvent, canvas: "TileWidget") -> None:
         pos = event.position()
         match self._tool:
+            case ToolMode.SELECT if self._select_rect_start and self._select_rect_end:
+                start, end = self._select_rect_start, self._select_rect_end
+                self._select_rect_start = None
+                self._select_rect_end = None
+                if abs(end.x() - start.x()) >= 5 or abs(end.y() - start.y()) >= 5:
+                    self._finish_select_rectangle(start, end, canvas)
+                else:
+                    self._try_select(pos, canvas)
             case ToolMode.DRAW_RECTANGLE if self._rect_start and self._rect_end:
                 self._finish_rectangle(canvas)
             case ToolMode.DRAW_CIRCLE if self._circle_center and self._circle_edge:
@@ -365,8 +467,16 @@ class InteractionHandler(QObject):
                         self._rotate_element_id or "",
                         self._rotate_current_deg,
                     )
+            case ToolMode.EDIT_VERTICES if self._vertex_drag_index is not None:
+                self._commit_vertex_edit(pos, canvas)
 
     def mouse_double_click(self, event: QMouseEvent, canvas: "TileWidget") -> None:
+        if self._tool == ToolMode.EDIT_VERTICES:
+            self._insert_vertex_at(event.position(), canvas)
+            return
+        if self._tool == ToolMode.DRAW_POLYLINE and len(self._polygon_pts) >= 2:
+            self._finish_polyline(canvas)
+            return
         if self._tool == ToolMode.DRAW_POLYGON and len(self._polygon_pts) >= 3:
             self._finish_polygon(canvas)
             return
@@ -394,9 +504,18 @@ class InteractionHandler(QObject):
         if event.key() == Qt.Key.Key_Escape:
             self._reset_draw_state()
             self.request_repaint.emit()
+        elif (
+            self._tool == ToolMode.EDIT_VERTICES
+            and event.key() == Qt.Key.Key_Delete
+            and self._vertex_selected_index is not None
+        ):
+            self._delete_selected_vertex(canvas)
         elif event.key() == Qt.Key.Key_Return and self._tool == ToolMode.DRAW_POLYGON:
             if len(self._polygon_pts) >= 3:
                 self._finish_polygon(canvas)
+        elif event.key() == Qt.Key.Key_Return and self._tool == ToolMode.DRAW_POLYLINE:
+            if len(self._polygon_pts) >= 2:
+                self._finish_polyline(canvas)
         elif self._tool == ToolMode.ROTATE_ELEMENT and self._rotate_element_type:
             if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Right):
                 self._rotate_current_deg = (self._rotate_current_deg + 1.0) % 360.0
@@ -427,26 +546,110 @@ class InteractionHandler(QObject):
                 self._move_preview_px = QPointF(base.x(), base.y() + _NUDGE_PX)
             self.request_repaint.emit()
 
+    def _vertex_edit_zone(self, canvas: "TileWidget") -> Zone | None:
+        if not canvas._project or not self._vertex_edit_zone_id:
+            return None
+        return next(
+            (zone for zone in canvas._project.zones
+             if str(zone.id) == self._vertex_edit_zone_id and not zone.locked),
+            None,
+        )
+
+    @staticmethod
+    def _nearest_vertex_index(
+        pos: QPointF, zone: Zone, canvas: "TileWidget"
+    ) -> tuple[int | None, float]:
+        if not zone.coordinates:
+            return None, float("inf")
+        points = [canvas.lat_lon_to_px(coord.lat, coord.lon) for coord in zone.coordinates]
+        distances = [math.hypot((point - pos).x(), (point - pos).y()) for point in points]
+        index = min(range(len(distances)), key=distances.__getitem__)
+        return index, distances[index]
+
+    def _commit_vertex_edit(self, pos: QPointF, canvas: "TileWidget") -> None:
+        zone = self._vertex_edit_zone(canvas)
+        index = self._vertex_drag_index
+        start = self._vertex_drag_start_px
+        self._vertex_drag_index = None
+        self._vertex_drag_start_px = None
+        self._vertex_drag_px = None
+        if (
+            zone is None
+            or index is None
+            or index >= len(zone.coordinates)
+            or (start is not None and math.hypot(pos.x() - start.x(), pos.y() - start.y()) <= 1)
+        ):
+            self.request_repaint.emit()
+            return
+        lat, lon = canvas.px_to_lat_lon(pos.x(), pos.y())
+        coordinates = list(zone.coordinates)
+        coordinates[index] = LatLon(lat=lat, lon=lon)
+        self.zone_vertices_changed.emit(self._vertex_edit_zone_id or "", coordinates)
+        self.request_repaint.emit()
+
+    def _insert_vertex_at(self, pos: QPointF, canvas: "TileWidget") -> None:
+        zone = self._vertex_edit_zone(canvas)
+        if zone is None or zone.zone_type == ZoneType.CIRCLE or len(zone.coordinates) < 2:
+            return
+        points = [canvas.lat_lon_to_px(coord.lat, coord.lon) for coord in zone.coordinates]
+        nearest_vertex, vertex_distance = self._nearest_vertex_index(pos, zone, canvas)
+        if nearest_vertex is not None and vertex_distance <= 10:
+            return
+        segment_count = len(points) if zone.zone_type != ZoneType.LINE else len(points) - 1
+        best: tuple[float, int] | None = None
+        for index in range(segment_count):
+            start, end = points[index], points[(index + 1) % len(points)]
+            dx, dy = end.x() - start.x(), end.y() - start.y()
+            length_sq = dx * dx + dy * dy
+            ratio = 0.0 if length_sq == 0 else max(
+                0.0,
+                min(1.0, ((pos.x() - start.x()) * dx + (pos.y() - start.y()) * dy) / length_sq),
+            )
+            nearest = QPointF(start.x() + ratio * dx, start.y() + ratio * dy)
+            distance = math.hypot(pos.x() - nearest.x(), pos.y() - nearest.y())
+            if best is None or distance < best[0]:
+                best = (distance, index + 1)
+        if best is None or best[0] > 12:
+            return
+        lat, lon = canvas.px_to_lat_lon(pos.x(), pos.y())
+        coordinates = list(zone.coordinates)
+        coordinates.insert(best[1], LatLon(lat=lat, lon=lon))
+        self.zone_vertices_changed.emit(self._vertex_edit_zone_id or "", coordinates)
+        self._vertex_selected_index = best[1]
+        self.request_repaint.emit()
+
+    def _delete_selected_vertex(self, canvas: "TileWidget") -> None:
+        zone = self._vertex_edit_zone(canvas)
+        index = self._vertex_selected_index
+        min_vertices = 2 if zone and zone.zone_type == ZoneType.LINE else 3
+        if zone is None or index is None or len(zone.coordinates) <= min_vertices:
+            return
+        coordinates = list(zone.coordinates)
+        coordinates.pop(index)
+        self.zone_vertices_changed.emit(self._vertex_edit_zone_id or "", coordinates)
+        self._vertex_selected_index = None
+        self.request_repaint.emit()
+
     def _on_hover_timeout(self) -> None:
         """Called after hover delay — hit-test data features and show tooltip."""
         if self._hover_pos is None or self._hover_canvas is None:
             return
         canvas = self._hover_canvas
         px, py = self._hover_pos.x(), self._hover_pos.y()
-        
+
         # Hit-test data layers
         result = canvas.hit_test_data_layers(px, py)
         if result is None:
             return
-        
+
         source_id, row_index = result
-        
+
         # Fetch row data
         rows = canvas._data_layer_rows.get(source_id, [])
         if row_index < 0 or row_index >= len(rows):
             return
         row_data = dict(rows[row_index])
-        
+
         # Build tooltip text: show first few non-internal attributes
         tooltip_parts = []
         for key, value in row_data.items():
@@ -455,7 +658,7 @@ class InteractionHandler(QObject):
             if len(tooltip_parts) >= 3:  # Limit to 3 attributes
                 break
             tooltip_parts.append(f"{key}: {value}")
-        
+
         if tooltip_parts:
             tooltip_text = "\n".join(tooltip_parts)
             # Show tooltip at global mouse position
@@ -484,6 +687,20 @@ class InteractionHandler(QObject):
         zone = Zone(zone_type=ZoneType.RECTANGLE, coordinates=corners, name=t("New Zone"))
         zone.label.text = zone.name
         self._rect_start = self._rect_end = None
+        self.draw_finished.emit("zone", zone)
+        self.request_repaint.emit()
+
+    def _finish_line(self, canvas: "TileWidget") -> None:
+        s, e = self._line_start, self._line_end
+        start = canvas.px_to_lat_lon(s.x(), s.y())
+        end = canvas.px_to_lat_lon(e.x(), e.y())
+        zone = Zone(
+            zone_type=ZoneType.LINE,
+            coordinates=[LatLon(lat=start[0], lon=start[1]), LatLon(lat=end[0], lon=end[1])],
+            name=t("New Line"),
+        )
+        zone.label.text = zone.name
+        self._line_start = self._line_end = None
         self.draw_finished.emit("zone", zone)
         self.request_repaint.emit()
 
@@ -684,6 +901,7 @@ class InteractionHandler(QObject):
     def _try_select(self, pos: QPointF, canvas: "TileWidget") -> None:
         if not canvas._project:
             return
+        self._multi_selected.clear()
         lat, lon = canvas.px_to_lat_lon(pos.x(), pos.y())
 
         # Check data layer features first (WFS/CSV/etc.)
@@ -728,6 +946,48 @@ class InteractionHandler(QObject):
         self._selected_type = None
         self._selected_id = None
         self.element_selected.emit("", "")
+
+    def _toggle_select_at(self, pos: QPointF, canvas: "TileWidget") -> None:
+        """Toggle the map element under the cursor in the multi-selection."""
+        hit_type, hit_id = canvas._hit_test(pos.x(), pos.y())
+        if not hit_type:
+            return
+        item = (hit_type, hit_id)
+        if item in self._multi_selected:
+            self._multi_selected.remove(item)
+        else:
+            self._multi_selected.append(item)
+        self._selected_type, self._selected_id = item
+        self.selection_box_finished.emit(list(self._multi_selected))
+        self.request_repaint.emit()
+
+    def _finish_select_rectangle(
+        self, start: QPointF, end: QPointF, canvas: "TileWidget"
+    ) -> None:
+        """Select elements whose representative point lies inside a drag box."""
+        if not canvas._project:
+            return
+        rect = QRectF(start, end).normalized()
+        found: list[tuple[str, str]] = []
+        for zone in canvas._project.zones:
+            if zone.visible and zone.coordinates:
+                points = [canvas.lat_lon_to_px(c.lat, c.lon) for c in zone.coordinates]
+                center = QPointF(
+                    sum(point.x() for point in points) / len(points),
+                    sum(point.y() for point in points) / len(points),
+                )
+                if any(rect.contains(point) for point in points) or rect.contains(center):
+                    found.append(("zone", str(zone.id)))
+        for kp in canvas._project.keypoints:
+            if kp.visible and rect.contains(canvas.lat_lon_to_px(kp.lat, kp.lon)):
+                found.append(("keypoint", str(kp.id)))
+        for ann in canvas._project.annotations:
+            if ann.visible and ann.anchor_lat is not None and ann.anchor_lon is not None:
+                if rect.contains(canvas.lat_lon_to_px(ann.anchor_lat, ann.anchor_lon)):
+                    found.append(("annotation", str(ann.id)))
+        self._multi_selected = found
+        self.selection_box_finished.emit(found)
+        self.request_repaint.emit()
 
     def _point_in_annotation(
         self, pos: QPointF, ann: Annotation, canvas: "TileWidget"
@@ -805,6 +1065,21 @@ class InteractionHandler(QObject):
             dlon = (lon - c.lon) * 111_320 * _math.cos(_math.radians(c.lat))
             dist = _math.sqrt(dlat * dlat + dlon * dlon)
             return dist <= zone.radius_m
+        if zone.zone_type == ZoneType.LINE and len(zone.coordinates) >= 2:
+            point = canvas.lat_lon_to_px(lat, lon)
+            points = [canvas.lat_lon_to_px(c.lat, c.lon) for c in zone.coordinates]
+            for start, end in zip(points, points[1:]):
+                dx, dy = end.x() - start.x(), end.y() - start.y()
+                length_sq = dx * dx + dy * dy
+                if length_sq == 0:
+                    if (point - start).manhattanLength() <= 12:
+                        return True
+                    continue
+                ratio = max(0.0, min(1.0, ((point.x() - start.x()) * dx + (point.y() - start.y()) * dy) / length_sq))
+                nearest = QPointF(start.x() + ratio * dx, start.y() + ratio * dy)
+                if math.hypot(point.x() - nearest.x(), point.y() - nearest.y()) <= 8:
+                    return True
+            return False
 
         # Ray-casting for polygons
         pts = zone.coordinates
@@ -825,10 +1100,19 @@ class InteractionHandler(QObject):
         match self._tool:
             case ToolMode.DRAW_POLYGON if self._polygon_pts:
                 self._preview_polygon(painter)
+            case ToolMode.DRAW_POLYLINE if self._polygon_pts:
+                self._preview_polygon(painter)
+            case ToolMode.DRAW_LINE if self._line_start and self._line_end:
+                painter.setPen(QPen(QColor("#00aaff"), 2, Qt.PenStyle.DashLine))
+                painter.drawLine(self._line_start, self._line_end)
             case ToolMode.DRAW_RECTANGLE if self._rect_start and self._rect_end:
                 self._preview_rectangle(painter)
             case ToolMode.DRAW_CIRCLE if self._circle_center and self._circle_edge:
                 self._preview_circle(painter)
+            case ToolMode.SELECT if self._select_rect_start and self._select_rect_end:
+                self._preview_select_rectangle(painter)
+            case ToolMode.EDIT_VERTICES:
+                self._preview_vertex_handles(painter, canvas)
             case ToolMode.MAGIC_WAND if len(self._lasso_pts) >= 2:
                 self._preview_lasso(painter)
             case ToolMode.MOVE_ELEMENT if self._move_element_type:
@@ -839,6 +1123,22 @@ class InteractionHandler(QObject):
                 self._preview_measurement(painter, canvas)
             case ToolMode.DIMENSION:
                 self._preview_dimension(painter, canvas)
+
+    def _preview_vertex_handles(self, painter: QPainter, canvas: "TileWidget") -> None:
+        zone = self._vertex_edit_zone(canvas)
+        if zone is None:
+            return
+        painter.setPen(QPen(QColor("#0b4f9c"), 1.5))
+        for index, coordinate in enumerate(zone.coordinates):
+            point = (
+                self._vertex_drag_px
+                if index == self._vertex_drag_index and self._vertex_drag_px is not None
+                else canvas.lat_lon_to_px(coordinate.lat, coordinate.lon)
+            )
+            painter.setBrush(
+                QColor("#ffb000") if index == self._vertex_selected_index else QColor("#ffffff")
+            )
+            painter.drawEllipse(point, 5.0, 5.0)
 
     def _preview_dimension(self, painter: QPainter, canvas: "TileWidget") -> None:
         """Show the dimension line before the second point is placed."""
@@ -874,6 +1174,12 @@ class InteractionHandler(QObject):
         painter.setPen(pen)
         fill = QColor(51, 136, 255, 40)
         painter.setBrush(fill)
+        painter.drawRect(rect)
+
+    def _preview_select_rectangle(self, painter: QPainter) -> None:
+        rect = QRectF(self._select_rect_start, self._select_rect_end).normalized()
+        painter.setPen(QPen(QColor("#3b82f6"), 1, Qt.PenStyle.DashLine))
+        painter.setBrush(QColor(59, 130, 246, 35))
         painter.drawRect(rect)
 
     def _preview_circle(self, painter: QPainter) -> None:

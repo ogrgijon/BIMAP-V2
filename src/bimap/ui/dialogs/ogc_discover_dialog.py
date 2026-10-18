@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 from bimap.i18n import t
 from bimap.ui._utils import add_dialog_help_button
 
-_HTTP_HEADERS = {"User-Agent": "BIMAP/1.0"}
+_HTTP_HEADERS = {"User-Agent": "MerekaiBIMAP/1.0"}
 
 
 class _DiscoverWorker(QThread):

@@ -6,7 +6,7 @@ import csv
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -79,6 +79,7 @@ class LayersPanel(QWidget):
     """
 
     element_selected = pyqtSignal(str, str)
+    elements_selected = pyqtSignal(list)  # list[(element_type, element_id)]
     element_visibility_changed = pyqtSignal(str, str, bool)
     element_delete_requested = pyqtSignal(str, str)
     layer_visibility_changed = pyqtSignal(str, bool)
@@ -121,7 +122,7 @@ class LayersPanel(QWidget):
 
         self._tree = _LayerTree()
         self._tree.setHeaderHidden(True)
-        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._tree.setDragEnabled(True)
         self._tree.setAcceptDrops(True)
         self._tree.setDropIndicatorShown(True)
@@ -129,6 +130,7 @@ class LayersPanel(QWidget):
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.setToolTip(t("Check layers and elements to show or hide them; right-click for actions"))
         self._tree.itemClicked.connect(self._on_item_clicked)
+        self._tree.itemSelectionChanged.connect(self._on_selection_changed)
         self._tree.itemChanged.connect(self._on_item_changed)
         self._tree.customContextMenuRequested.connect(self._on_context_menu)
         self._tree.item_layer_changed.connect(self.element_layer_changed)
@@ -279,7 +281,7 @@ class LayersPanel(QWidget):
                 | Qt.ItemFlag.ItemIsEnabled
             )
             self._data_tree.addTopLevelItem(item)
-            
+
             # Add opacity slider in second column
             opacity_slider = QSlider(Qt.Orientation.Horizontal)
             opacity_slider.setMinimum(0)
@@ -292,7 +294,7 @@ class LayersPanel(QWidget):
                 lambda value, layer_id=dl.id: self._on_opacity_changed(layer_id, value)
             )
             self._data_tree.setItemWidget(item, 1, opacity_slider)
-            
+
         self._data_tree.blockSignals(False)
 
     def _on_opacity_changed(self, layer_id: str, value: int) -> None:
@@ -328,14 +330,44 @@ class LayersPanel(QWidget):
                     self._tree.setCurrentItem(child)
                     return
 
+    def select_elements(self, elements: list[tuple[str, str]]) -> None:
+        """Programmatically highlight multiple element rows in the tree."""
+        wanted = set(elements)
+        self._tree.blockSignals(True)
+        self._tree.clearSelection()
+        for i in range(self._tree.topLevelItemCount()):
+            layer_item = self._tree.topLevelItem(i)
+            if layer_item is None:
+                continue
+            for j in range(layer_item.childCount()):
+                child = layer_item.child(j)
+                data = child.data(0, _ROLE) if child else None
+                if data in wanted:
+                    child.setSelected(True)
+        self._tree.blockSignals(False)
+
 
     def _on_item_clicked(self, item: QTreeWidgetItem | None, _column: int) -> None:
         if item is None:
             return
         data = item.data(0, _ROLE)
         if data and data[0] not in ("_layer",):
+            if len(self._tree.selectedItems()) > 1:
+                # The selection-changed signal owns multi-selection. Emitting
+                # a single-item selection here would immediately collapse it
+                # in the main window.
+                return
             etype, eid = data
             self.element_selected.emit(etype, eid)
+
+    def _on_selection_changed(self) -> None:
+        """Publish all selected element rows, including Ctrl-click additions."""
+        selected: list[tuple[str, str]] = []
+        for item in self._tree.selectedItems():
+            data = item.data(0, _ROLE)
+            if data and data[0] != "_layer":
+                selected.append((data[0], data[1]))
+        self.elements_selected.emit(selected)
 
     def _on_data_item_changed(self, item: QTreeWidgetItem | None, _column: int) -> None:
         if item is None:
@@ -421,13 +453,34 @@ class LayersPanel(QWidget):
                 self.layer_remove_requested.emit(layer_name)
         else:
             etype, eid = d
+            selected = []
+            for selected_item in self._tree.selectedItems():
+                selected_data = selected_item.data(0, _ROLE)
+                if selected_data and selected_data[0] != "_layer":
+                    selected.append(selected_data)
             act_goto   = menu.addAction(t("🎯  Go to"))
             act_edit   = menu.addAction(t("✏  Edit…"))
             act_update = menu.addAction(t("🔄  Update"))
             menu.addSeparator()
             act_remove = menu.addAction(t("🗑  Remove…"))
+            act_fuse = None
+            if len(selected) >= 2 and all(
+                etype_ == "zone"
+                and self._project
+                and any(
+                    str(z.id) == eid_
+                    and getattr(z.zone_type, "value", z.zone_type) == "line"
+                    for z in self._project.zones
+                )
+                for etype_, eid_ in selected
+            ):
+                menu.insertSeparator(act_remove)
+                act_fuse = QAction(t("Fuse Selected Lines"), menu)
+                menu.insertAction(act_remove, act_fuse)
             chosen = menu.exec(self._tree.mapToGlobal(pos))
-            if chosen == act_goto:
+            if act_fuse is not None and chosen == act_fuse:
+                self.element_action_requested.emit("fuse", "", "")
+            elif chosen == act_goto:
                 self.element_action_requested.emit("go_to", etype, eid)
             elif chosen == act_edit:
                 self.element_action_requested.emit("edit", etype, eid)
@@ -561,4 +614,3 @@ class LayersPanel(QWidget):
         QMessageBox.information(
             self, "CSV Exported", f"Exported {len(rows)} element(s) to:\n{path}"
         )
-

@@ -1,13 +1,12 @@
 """In-app floating HTML5/CSS/JS extension viewer.
 
-Opens the rendered extension inside a resizable BIMAP dialog using
+Opens the rendered extension inside a resizable MerekaiBIMAP dialog using
 ``QWebEngineView`` when available, otherwise opens in the system browser and
 shows a status message in the dialog.
 """
 
 from __future__ import annotations
 
-import json
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -25,7 +24,10 @@ from PyQt6.QtWidgets import (
 
 from bimap.i18n import t
 from bimap.ui._utils import add_top_right_help_button, show_help_dialog
-from bimap.ui.dialogs.extension_editor_dialog import _build_data_payload
+from bimap.ui.dialogs.extension_editor_dialog import (
+    _build_data_payload,
+    _serialize_script_data,
+)
 
 # Try to import QWebEngineView — it requires PyQtWebEngine which is optional
 try:
@@ -51,14 +53,14 @@ def _data_dir_url() -> QUrl:
 
 
 def _build_rendered_html(element: Any, etype: str) -> str:
-    """Inject BIMAP_DATA into the element's extension_html and return the full document."""
+    """Inject MerekaiBIMAP_DATA into the element's extension_html and return the full document."""
     html_template: str = getattr(element, "extension_html", "").strip()
     if not html_template:
         raise ValueError(t("No extension configured for this element."))
 
     payload = _build_data_payload(element, etype)
-    data_js = json.dumps(payload, ensure_ascii=False, indent=2)
-    injection = f"<script>\nconst BIMAP_DATA = {data_js};\n</script>\n"
+    data_js = _serialize_script_data(payload)
+    injection = f"<script>\nconst MerekaiBIMAP_DATA = {data_js};\n</script>\n"
 
     if "</head>" in html_template:
         return html_template.replace("</head>", injection + "</head>", 1)

@@ -8,6 +8,7 @@ from bimap.data.api_source import ApiSource
 from bimap.data.base import DataSourceBase
 from bimap.data.csv_source import CsvSource
 from bimap.data.geojson_source import GeoJsonSource
+from bimap.data.geopackage_source import GeoPackageSource
 from bimap.data.refresh import DataRefreshManager, RefreshWorker
 from bimap.data.sql_source import SqlSource
 from bimap.data.wfs_source import WfsSource
@@ -39,6 +40,11 @@ def build_connector(ds: DataSource) -> DataSourceBase:
             )
         case SourceType.GEOJSON:
             return GeoJsonSource(path_or_url=c.get("path_or_url", ""))
+        case SourceType.GEOPACKAGE:
+            return GeoPackageSource(
+                file_path=c.get("file_path", ""),
+                table_name=c.get("table_name", ""),
+            )
         case SourceType.WFS:
             return WfsSource(
                 url=c.get("url", ""),
@@ -72,6 +78,7 @@ __all__ = [
     "DataRefreshManager",
     "DataSourceBase",
     "GeoJsonSource",
+    "GeoPackageSource",
     "RefreshWorker",
     "SqlSource",
     "WfsSource",

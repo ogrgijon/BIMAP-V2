@@ -7,7 +7,7 @@
     Inno Setup. All output lands in installer/dist/.
 
 .PARAMETER Version
-    Version string to embed in the portable filename  (e.g. "0.3.0")
+    Version string to embed in the portable filename  (e.g. "2.1.0")
 
 .PARAMETER PortableOnly
     Skip the onedir build. Useful for quick CI/local portable testing.
@@ -17,10 +17,10 @@
 
 .EXAMPLE
     # Portable EXE only
-    .\installer\build_installer.ps1 -Version 0.2.0 -PortableOnly
+    .\installer\build_installer.ps1 -Version 2.1.0 -PortableOnly
 
     # Full build (portable + onedir + Inno Setup)
-    .\installer\build_installer.ps1 -Version 0.2.0
+    .\installer\build_installer.ps1 -Version 2.1.0
 #>
 param(
     [Parameter(Mandatory)][string]$Version,

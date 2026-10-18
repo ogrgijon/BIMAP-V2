@@ -1,4 +1,4 @@
-# BIMAP — Installation & Build Guide
+# MerekaiBIMAP — Installation & Build Guide
 
 [← Back to README](../readme.md)
 
@@ -62,7 +62,7 @@ python -m bimap.app
 bimap
 ```
 
-On first launch BIMAP creates:
+On first launch MerekaiBIMAP creates:
 - `~/.bimap/` — application data root
 - `~/.bimap/tile_cache/` — cached map tiles
 - `~/.bimap/projects/` — default project folder
@@ -89,10 +89,10 @@ python -m pytest tests/ --cov=src/bimap --cov-report=term-missing
 ### Portable EXE (recommended — no install required)
 
 ```powershell
-.\installer\build_installer.ps1 -Version 0.3.0 -PortableOnly
+.\installer\build_installer.ps1 -Version 2.1.0 -PortableOnly
 ```
 
-Output: `BIMAP-v0.3.0-windows-x64-portable.exe` — double-click to run, no Python needed.
+Output: `BIMAP-v2.1.0-windows-x64-portable.exe` — double-click to run, no Python needed.
 
 ### Onedir build (for Inno Setup installer)
 
@@ -101,14 +101,14 @@ pyinstaller installer\bimap.spec `
     --distpath installer\dist `
     --workpath installer\build `
     --noconfirm
-# Output folder: installer\dist\BIMAP\
+# Output folder: installer\dist\MerekaiBIMAP\
 ```
 
 Then compile the installer:
 
 ```powershell
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
-# Output: installer\Output\BIMAP-v0.3.0-setup.exe
+# Output: installer\Output\BIMAP-v2.1.0-setup.exe
 ```
 
 ### Bumping the Version
@@ -138,8 +138,8 @@ Pipeline steps:
 ### Triggering a Release
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 The workflow automatically builds the EXE, creates a GitHub Release, and attaches the portable binary.
@@ -158,13 +158,19 @@ SQL connection strings and REST API tokens are stored **in plaintext** inside `.
 - Add your project files to `.gitignore` if they reference production databases or APIs.
 - For production use, integrate a secret manager (environment variables, `keyring`, Vault) — this is not yet implemented.
 
+### HTML/JavaScript extensions
+
+Custom extensions execute JavaScript when previewed or opened in the viewer. Treat
+project files and extension templates from untrusted sources as executable content:
+open only trusted files, and avoid exposing sensitive data to extensions.
+
 ### SQL query execution
 
 The SQL connector enforces a `SELECT`-only guard and uses SQLAlchemy `text()` parameterisation. However, the user constructs the query string — treat any query from an untrusted source with appropriate caution.
 
 ### Network requests
 
-BIMAP fetches tiles from external providers (OSM, CartoDB, etc.) and geocodes via Nominatim. Your IP is visible to those services. See:
+MerekaiBIMAP fetches tiles from external providers (OSM, CartoDB, etc.) and geocodes via Nominatim. Your IP is visible to those services. See:
 - [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
 - [Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)
 

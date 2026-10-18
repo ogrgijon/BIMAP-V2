@@ -1,8 +1,8 @@
-# BIMAP — Contributing Guide
+# MerekaiBIMAP — Contributing Guide
 
 [← Back to README](../readme.md)
 
-Thank you for your interest in BIMAP! This guide covers how to report bugs, suggest features, and submit pull requests.
+Thank you for your interest in MerekaiBIMAP! This guide covers how to report bugs, suggest features, and submit pull requests.
 
 ---
 
@@ -32,7 +32,7 @@ Open a [GitHub Issue](https://github.com/ogrgijon/BIMAP-V2/issues) and include:
 - **Steps to reproduce** — be specific
 - **Expected behaviour** — what should happen
 - **Actual behaviour** — what does happen
-- **BIMAP version** — shown in Help → About
+- **MerekaiBIMAP version** — shown in Help → About
 - **OS and Python version**
 - **Traceback / error log** — paste from Help → About (triple-click to reveal debug log)
 

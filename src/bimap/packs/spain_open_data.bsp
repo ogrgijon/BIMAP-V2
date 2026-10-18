@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  BIMAP Source Pack — Spain Open Geospatial Services
+  MerekaiBIMAP Source Pack — Spain Open Geospatial Services
   ====================================================
   Format version: 1
-  Author:         BIMAP Community / IDEE
+  Author:         MerekaiBIMAP Community / IDEE
   License:        CC-BY 4.0
 
-  Import this file in BIMAP via  Data ▸ Import Source Pack…
+  Import this file in MerekaiBIMAP via  Data ▸ Import Source Pack…
 
   Each <source> entry describes one pre-configured data layer.
   Parameters marked  fixed="true"  are locked service defaults.
@@ -16,7 +16,7 @@
 
   <meta>
     <name>Spain Open Geospatial Services</name>
-    <author>BIMAP Community</author>
+    <author>MerekaiBIMAP Community</author>
     <description>Free INSPIRE and open-data WFS and GeoJSON layers from Spanish public SDIs (IDEE, IGN, INE)</description>
     <version>1.0.0</version>
     <url>https://www.idee.es</url>

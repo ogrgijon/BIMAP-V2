@@ -1,4 +1,4 @@
-"""Extension template model for the BIMAP extension library."""
+"""Extension template model for the MerekaiBIMAP extension library."""
 
 from __future__ import annotations
 
@@ -13,4 +13,4 @@ class ExtensionTemplate(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     name: str = "My Extension"
     description: str = ""
-    html: str = ""         # full HTML5 document (BIMAP_DATA is injected at runtime)
+    html: str = ""         # full HTML5 document (MerekaiBIMAP_DATA is injected at runtime)

@@ -95,7 +95,7 @@ class DataSourceDialog(QDialog):
         page = QWidget()
         form = QFormLayout(page)
         match st:
-            case SourceType.CSV | SourceType.EXCEL:
+            case SourceType.CSV | SourceType.EXCEL | SourceType.GEOPACKAGE:
                 path_widget = QWidget()
                 row = QHBoxLayout(path_widget)
                 row.setContentsMargins(0, 0, 0, 0)
@@ -106,10 +106,16 @@ class DataSourceDialog(QDialog):
                 row.addWidget(edit)
                 row.addWidget(btn)
                 form.addRow(t("File Path"), path_widget)
-                sheet = QLineEdit()
-                sheet.setObjectName("sheet_name")
-                sheet.setPlaceholderText(t("Sheet name or index (default: 0)"))
-                form.addRow(t("Sheet"), sheet)
+                if st in (SourceType.CSV, SourceType.EXCEL):
+                    sheet = QLineEdit()
+                    sheet.setObjectName("sheet_name")
+                    sheet.setPlaceholderText(t("Sheet name or index (default: 0)"))
+                    form.addRow(t("Sheet"), sheet)
+                else:
+                    table = QLineEdit()
+                    table.setObjectName("table_name")
+                    table.setPlaceholderText(t("Optional feature table (default: first)"))
+                    form.addRow(t("Feature Table"), table)
 
             case SourceType.SQL:
                 conn_edit = QLineEdit()

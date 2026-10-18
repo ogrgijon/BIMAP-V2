@@ -1,5 +1,5 @@
 """
-BIMAP application entry point.
+MerekaiBIMAP application entry point.
 
 Usage
 -----

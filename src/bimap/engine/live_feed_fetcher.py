@@ -90,7 +90,7 @@ class LiveFeedFetcher(QObject):
         req = QNetworkRequest(QUrl(layer.feed_url))
         req.setHeader(
             QNetworkRequest.KnownHeaders.UserAgentHeader,
-            f"BIMAP/{APP_VERSION} (https://github.com/ogrgijon/BIMAP)",
+            f"MerekaiBIMAP/{APP_VERSION} (https://github.com/ogrgijon/MerekaiBIMAP)",
         )
         req.setTransferTimeout(self._timeout_ms)
         # Resolve auth header — prefer keyring over plaintext stored in model

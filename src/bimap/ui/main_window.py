@@ -16,12 +16,13 @@ from __future__ import annotations
 import ast
 import collections
 import copy
+import heapq
 import json
 import math
 import operator as _op
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from PyQt6.QtCore import QSettings, QTimer, Qt, QThreadPool
 from PyQt6.QtGui import QAction, QKeySequence, QPainter, QUndoStack
@@ -62,8 +63,13 @@ from bimap.engine.commands import (
     SetMetadataCommand,
 )
 from bimap.engine.live_feed_fetcher import LiveFeedFetcher
-from bimap.engine.project_io import ProjectIOError, export_backup, export_elements_csv, import_backup, load_project, save_project
+from bimap.engine.project_io import (
+    ProjectIOError, export_backup, export_elements_csv, export_elements_geopackage,
+    export_elements_excel, import_elements_csv, import_elements_excel, import_elements_geopackage, import_backup,
+    load_project, resolve_element_conflict, save_project,
+)
 from bimap.models.data_source import DataSource, RefreshMode
+from bimap.models.annotation import Annotation, AnnotationType
 from bimap.models.keypoint import Keypoint
 from bimap.models.live_layer import LiveLayer
 from bimap.models.project import Project
@@ -80,6 +86,87 @@ from bimap.ui._utils import _set_nested_attr, ask_question
 
 _RECENT_FILES_KEY = "recentFiles"
 _MAX_RECENT = 10
+
+
+def _parse_geojson_uuid(value: Any) -> UUID | None:
+    """Parse an exported element id without rejecting external GeoJSON."""
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _join_line_coordinates(
+    lines: list[list[LatLon]], max_gap_m: float = 100.0
+) -> list[LatLon] | None:
+    """Join line paths through their closest endpoints.
+
+    Each next path may be reversed, and the current chain may be reversed, so
+    the closest available endpoint is always used.  The two endpoints are
+    replaced by their midpoint to make the join explicit and avoid a small
+    residual gap.
+    """
+    if len(lines) < 2 or any(len(line) < 2 for line in lines):
+        return None
+
+    chain = list(lines[0])
+    remaining = [list(line) for line in lines[1:]]
+    while remaining:
+        best: tuple[float, bool, int, bool] | None = None
+        for index, line in enumerate(remaining):
+            for chain_at_start in (True, False):
+                chain_vertex = chain[0] if chain_at_start else chain[-1]
+                for line_at_start in (True, False):
+                    line_vertex = line[0] if line_at_start else line[-1]
+                    distance = _haversine_m(
+                        chain_vertex.lat, chain_vertex.lon,
+                        line_vertex.lat, line_vertex.lon,
+                    )
+                    if best is None or distance < best[0]:
+                        best = (distance, chain_at_start, index, line_at_start)
+
+        assert best is not None
+        distance, chain_at_start, index, line_at_start = best
+        if distance > max_gap_m:
+            return None
+
+        if chain_at_start:
+            chain.reverse()
+        candidate = remaining.pop(index)
+        if not line_at_start:
+            candidate.reverse()
+
+        join_lat = (chain[-1].lat + candidate[0].lat) / 2
+        join_lon = (chain[-1].lon + candidate[0].lon) / 2
+        join_vertex = LatLon(lat=join_lat, lon=join_lon)
+        chain[-1] = join_vertex
+        candidate[0] = join_vertex
+        chain.extend(candidate[1:])
+    return chain
+
+
+def _flatten_search_attributes(
+    value: Any, prefix: str = ""
+) -> list[tuple[str, str]]:
+    """Flatten nested attributes into searchable field/value pairs."""
+    attributes: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if str(key).startswith("_"):
+                continue
+            field = f"{prefix}.{key}" if prefix else str(key)
+            attributes.extend(_flatten_search_attributes(child, field))
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            attributes.extend(_flatten_search_attributes(child, f"{prefix}.{index}"))
+    elif isinstance(value, (str, int, float, bool)) and value is not None:
+        text = str(value).strip()
+        if text:
+            attributes.append((prefix, text))
+    return attributes
+
 
 # ── Safe expression evaluator for field-mapping transforms ─────────────────────
 
@@ -307,29 +394,14 @@ class MainWindow(QMainWindow):
         file_menu.addAction(act_save_as)
 
         file_menu.addSeparator()
-        act_import = QAction(t("Import GeoJSON…"), self)
-        act_import.triggered.connect(self._cmd_import_geojson)
-        file_menu.addAction(act_import)
-
-        act_export_geojson = QAction(t("Export GeoJSON…"), self)
-        act_export_geojson.setToolTip(t("Export all zones and keypoints as a GeoJSON file"))
-        act_export_geojson.triggered.connect(self._cmd_export_geojson)
-        file_menu.addAction(act_export_geojson)
-
         file_menu.addSeparator()
-        act_backup_exp = QAction(t("📤  Export Data Backup…"), self)
-        act_backup_exp.setToolTip(t("Save a portable backup file you can transfer to another PC"))
-        act_backup_exp.triggered.connect(self._cmd_export_backup)
-        file_menu.addAction(act_backup_exp)
-        act_backup_imp = QAction(t("📥  Import Data Backup…"), self)
-        act_backup_imp.setToolTip(t("Load a backup or .bimap file and replace the current project"))
-        act_backup_imp.triggered.connect(self._cmd_import_backup)
-        file_menu.addAction(act_backup_imp)
-
-        act_export_csv = QAction(t("📊  Export Elements CSV…"), self)
-        act_export_csv.setToolTip(t("Export all zones and keypoints with their attributes to CSV"))
-        act_export_csv.triggered.connect(self._cmd_export_elements_csv)
-        file_menu.addAction(act_export_csv)
+        file_menu.addSeparator()
+        act_export_elements = QAction(t("Exportar"), self)
+        act_export_elements.triggered.connect(self._cmd_export_elements_unified)
+        file_menu.addAction(act_export_elements)
+        act_import_elements = QAction(t("Importar"), self)
+        act_import_elements.triggered.connect(self._cmd_import_elements_unified)
+        file_menu.addAction(act_import_elements)
 
         file_menu.addSeparator()
         act_export = QAction(t("Print / Export PDF…"), self)
@@ -365,6 +437,7 @@ class MainWindow(QMainWindow):
             ("Pan", "H", ToolMode.PAN),
             ("Rotate", "R", ToolMode.ROTATE_ELEMENT),
             ("Move", "G", ToolMode.MOVE_ELEMENT),
+            ("Edit Vertices", "V", ToolMode.EDIT_VERTICES),
             ("Lasso Selector", "L", ToolMode.MAGIC_WAND),
         ]
         for label, shortcut, mode in _tool_shortcuts:
@@ -377,6 +450,8 @@ class MainWindow(QMainWindow):
         edit_menu.addSeparator()
         _create_tools = [
             ("Draw Polygon Zone",    "Ctrl+Shift+P", "P", ToolMode.DRAW_POLYGON),
+            ("Draw Line",             "Ctrl+Shift+L", "L", ToolMode.DRAW_LINE),
+            ("Draw Polyline",         "Ctrl+Shift+Y", "Y", ToolMode.DRAW_POLYLINE),
             ("Draw Rectangle Zone", "Ctrl+Shift+R", "B", ToolMode.DRAW_RECTANGLE),
             ("Draw Circle Zone",     "Ctrl+Shift+C", "O", ToolMode.DRAW_CIRCLE),
             ("Place Keypoint",       "Ctrl+Shift+K", "K", ToolMode.DRAW_KEYPOINT),
@@ -388,6 +463,9 @@ class MainWindow(QMainWindow):
             act.setShortcuts([QKeySequence(shortcut), QKeySequence(quick_shortcut)])
             act.triggered.connect(lambda _checked=False, m=mode: self._canvas.set_tool(m))
             edit_menu.addAction(act)
+        act_fuse = QAction(t("Fuse Selected Lines"), self)
+        act_fuse.triggered.connect(self._cmd_fuse_selected_lines)
+        edit_menu.addAction(act_fuse)
 
         edit_menu.addSeparator()
         act_prefs = QAction(t("Preferences…"), self)
@@ -554,7 +632,7 @@ class MainWindow(QMainWindow):
         lang_menu.addAction(act_lang_es)
 
         help_menu.addSeparator()
-        act_about = QAction(t("About BIMAP"), self)
+        act_about = QAction(t("About MerekaiBIMAP"), self)
         act_about.triggered.connect(self._cmd_about)
         help_menu.addAction(act_about)
 
@@ -574,7 +652,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         # Toolbar
         self._toolbar.tool_selected.connect(self._on_tool_selected)
-        self._toolbar.import_requested.connect(self._cmd_import_geojson)
+        self._toolbar.import_requested.connect(self._cmd_import_elements_unified)
         self._toolbar.print_requested.connect(self._cmd_print_export)
         self._toolbar.toggle_grid_requested.connect(self._on_toggle_grid)
         self._toolbar.rotate_degree_changed.connect(self._on_rotate_degree_from_toolbar)
@@ -583,6 +661,12 @@ class MainWindow(QMainWindow):
         self._search_bar.zoom_in_requested.connect(self._cmd_zoom_in)
         self._search_bar.zoom_out_requested.connect(self._cmd_zoom_out)
         self._search_bar.search_requested.connect(self._on_search_requested)
+        self._search_bar.element_search_text_changed.connect(
+            self._on_element_search_text_changed
+        )
+        self._search_bar.element_search_requested.connect(
+            self._on_element_search_requested
+        )
 
         # Map canvas
         self._canvas.viewport_changed.connect(self._on_viewport_changed)
@@ -594,15 +678,18 @@ class MainWindow(QMainWindow):
         self._canvas.coordinates_changed.connect(self._on_coords_changed)
         self._canvas.context_action_requested.connect(self._on_context_action)
         self._canvas.multi_select_finished.connect(self._on_multi_select)
+        self._canvas.selection_box_finished.connect(self._on_selection_box)
         self._canvas.element_move_dropped.connect(self._on_element_move_dropped)
         self._canvas.add_annotation_requested.connect(self._on_add_annotation_at)
         self._canvas.open_extension_requested.connect(self._on_open_extension)
         self._canvas.element_rotated.connect(self._on_element_rotated)
+        self._canvas.zone_vertices_changed.connect(self._on_zone_vertices_changed)
         self._canvas.network_status_changed.connect(self._on_network_status_changed)
         self._canvas.data_feature_selected.connect(self._on_data_feature_selected)
 
         # Layers panel
         self._layers_panel.element_selected.connect(self._on_element_selected)
+        self._layers_panel.elements_selected.connect(self._on_layers_multi_select)
         self._layers_panel.element_visibility_changed.connect(self._on_visibility_changed)
         self._layers_panel.element_delete_requested.connect(
             lambda et, eid: self._delete_element(et, eid)
@@ -661,16 +748,255 @@ class MainWindow(QMainWindow):
     # ── Refresh / update helpers ───────────────────────────────────────────────
 
     def _refresh_all(self) -> None:
+        selected = list(getattr(self._canvas._interaction, "multi_selected", []))
         self._layers_panel.refresh(self._project)
+        if len(selected) > 1:
+            self._layers_panel.select_elements(selected)
+            self._canvas.set_multi_selected(selected)
         self._keynotes_panel.refresh(self._project)
         self._data_panel.refresh(self._project)
         self._live_panel.load_layers(self._project.live_layers)
+        self._on_element_search_text_changed(self._search_bar.element_search_text())
         self._canvas.update()
         self._zoom_label.setText(f"Zoom: {self._project.map_state.zoom}")
         self._source_label.setText(f"Sources: {len(self._project.data_sources)}")
         # Defer properties panel rebuild to avoid segfault when called from
         # inside a signal handler (e.g. QDoubleSpinBox editingFinished).
         QTimer.singleShot(0, self._props_panel.refresh_current)
+
+    def _on_element_search_text_changed(self, query: str) -> None:
+        query = query.strip().casefold()
+        ranked_suggestions: list[tuple[int, int, str, object]] = []
+        match_order = 0
+        if not query:
+            self._search_bar.set_element_search_suggestions([])
+            return
+
+        def add_suggestions(
+            element_type: str,
+            element_id: str,
+            display_name: str,
+            attributes: dict[str, Any],
+            coordinates: list[tuple[float, float]],
+            source_id: str = "",
+            row_index: int = -1,
+        ) -> None:
+            nonlocal match_order
+            if not coordinates:
+                return
+            for field, value in _flatten_search_attributes(attributes):
+                folded_field = field.casefold()
+                folded_value = value.casefold()
+                if query not in folded_field and query not in folded_value:
+                    continue
+                label = f"{display_name} — {field}: {value[:100]}"
+                target: dict[str, Any] = {
+                    "type": element_type,
+                    "id": element_id,
+                }
+                if element_type == "data_feature":
+                    target["source_id"] = source_id
+                    target["row_index"] = row_index
+                if query == folded_value:
+                    rank = 0
+                elif folded_value.startswith(query):
+                    rank = 1
+                elif query == folded_field:
+                    rank = 2
+                elif folded_field.startswith(query):
+                    rank = 3
+                else:
+                    rank = 4
+                match_order += 1
+                suggestion = (-rank, -match_order, label, target)
+                if len(ranked_suggestions) < 50:
+                    heapq.heappush(ranked_suggestions, suggestion)
+                elif suggestion > ranked_suggestions[0]:
+                    heapq.heapreplace(ranked_suggestions, suggestion)
+
+        for zone in self._project.zones:
+            if not zone.visible:
+                continue
+            attrs = zone.model_dump(
+                mode="json",
+                exclude={
+                    "id", "coordinates", "data_binding", "metadata_bindings",
+                    "metadata_hidden", "extension_html",
+                },
+            )
+            coords = [(point.lat, point.lon) for point in zone.coordinates]
+            add_suggestions("zone", str(zone.id), zone.name, attrs, coords)
+
+        for point in self._project.keypoints:
+            if not point.visible:
+                continue
+            attrs = point.model_dump(
+                mode="json",
+                exclude={
+                    "id", "data_binding", "metadata_bindings", "metadata_hidden",
+                    "extension_html",
+                },
+            )
+            coordinates = [(point.lat, point.lon)]
+            add_suggestions(
+                "keypoint", str(point.id), point.info_card.title or t("Keypoint"),
+                attrs, coordinates,
+            )
+
+        for annotation in self._project.annotations:
+            if not annotation.visible:
+                continue
+            attrs = annotation.model_dump(
+                mode="json",
+                exclude={"id", "metadata_bindings", "metadata_hidden"},
+            )
+            coordinates = self._element_search_coordinates("annotation", annotation)
+            add_suggestions(
+                "annotation", str(annotation.id), annotation.content,
+                attrs, coordinates,
+            )
+
+        visible_sources = {
+            layer.source_id for layer in self._project.data_layers if layer.visible
+        }
+        source_names = {
+            str(source.id): source.name for source in self._project.data_sources
+        }
+        for source_id, rows in self._canvas._data_layer_rows.items():
+            if source_id not in visible_sources:
+                continue
+            for row_index, row in enumerate(rows):
+                coordinates = self._data_feature_coordinates(row)
+                attributes = {
+                    key: value for key, value in row.items()
+                    if not key.startswith("_")
+                }
+                display_name = next(
+                    (
+                        str(attributes[key]) for key in ("name", "Name", "title", "Title", "label")
+                        if attributes.get(key) not in (None, "")
+                    ),
+                    f"{source_names.get(source_id, source_id)} · {t('Feature')} {row_index + 1}",
+                )
+                add_suggestions(
+                    "data_feature", str(row_index), display_name, attributes,
+                    coordinates, source_id, row_index,
+                )
+
+        suggestions = [
+            (label, target)
+            for _, _, label, target in sorted(ranked_suggestions, reverse=True)
+        ]
+        self._search_bar.set_element_search_suggestions(suggestions)
+
+    def _element_search_coordinates(
+        self, element_type: str, element: Any
+    ) -> list[tuple[float, float]]:
+        if element_type == "annotation":
+            if element.anchor_lat is not None and element.anchor_lon is not None:
+                return [(element.anchor_lat, element.anchor_lon)]
+            if element.target_lat is not None and element.target_lon is not None:
+                return [(element.target_lat, element.target_lon)]
+            if (
+                element.dimension_start_lat is not None
+                and element.dimension_start_lon is not None
+                and element.dimension_end_lat is not None
+                and element.dimension_end_lon is not None
+            ):
+                return [
+                    (element.dimension_start_lat, element.dimension_start_lon),
+                    (element.dimension_end_lat, element.dimension_end_lon),
+                ]
+        return []
+
+    def _data_feature_coordinates(self, row: dict[str, Any]) -> list[tuple[float, float]]:
+        lat, lon = row.get("_lat"), row.get("_lon")
+        if lat is not None and lon is not None:
+            try:
+                lat_value, lon_value = float(lat), float(lon)
+                if (
+                    math.isfinite(lat_value) and math.isfinite(lon_value)
+                    and -90 <= lat_value <= 90 and -180 <= lon_value <= 180
+                ):
+                    return [(lat_value, lon_value)]
+            except (TypeError, ValueError):
+                pass
+
+        coordinates = row.get("_coordinates")
+        if not coordinates:
+            return []
+        try:
+            raw_coordinates = json.loads(coordinates)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        pairs: list[tuple[float, float]] = []
+
+        def collect(value: Any) -> None:
+            if not isinstance(value, (list, tuple)):
+                return
+            if len(value) >= 2 and all(
+                isinstance(part, (int, float)) for part in value[:2]
+            ):
+                lon_value, lat_value = float(value[0]), float(value[1])
+                if (
+                    math.isfinite(lat_value) and math.isfinite(lon_value)
+                    and -90 <= lat_value <= 90 and -180 <= lon_value <= 180
+                ):
+                    pairs.append((lat_value, lon_value))
+                return
+            for child in value:
+                collect(child)
+
+        collect(raw_coordinates)
+        return pairs
+
+    def _on_element_search_requested(self, target: object) -> None:
+        if not isinstance(target, dict):
+            return
+        element_type = target.get("type")
+        if element_type == "data_feature":
+            source_id = target.get("source_id")
+            row_index = target.get("row_index")
+            if not isinstance(source_id, str) or not isinstance(row_index, int):
+                return
+            rows = self._canvas._data_layer_rows.get(source_id, [])
+            if row_index < 0 or row_index >= len(rows):
+                return
+            coordinates = self._data_feature_coordinates(rows[row_index])
+            if not coordinates:
+                return
+            if len(coordinates) > 1:
+                lats, lons = zip(*coordinates)
+                self._canvas.fit_to_extent(
+                    min(lats), min(lons), max(lats), max(lons), padding=0.2
+                )
+            else:
+                self._canvas.set_viewport(
+                    coordinates[0][0], coordinates[0][1], max(self._canvas.zoom, 15)
+                )
+            self._canvas.select_data_feature(source_id, row_index)
+            return
+
+        element_id = target.get("id")
+        if not isinstance(element_type, str) or not isinstance(element_id, str):
+            return
+        element = self._find_element(element_type, element_id)
+        if element is None:
+            return
+
+        if element_type == "zone":
+            coordinates = [(point.lat, point.lon) for point in element.coordinates]
+        elif element_type == "keypoint":
+            coordinates = [(element.lat, element.lon)]
+        else:
+            coordinates = self._element_search_coordinates(element_type, element)
+        if not coordinates:
+            return
+        center_lat = sum(lat for lat, _ in coordinates) / len(coordinates)
+        center_lon = sum(lon for _, lon in coordinates) / len(coordinates)
+        self._canvas.set_viewport(center_lat, center_lon, max(self._canvas.zoom, 15))
+        self._on_element_selected(element_type, element_id)
 
     def _set_project(self, project: Project) -> None:
         self._fetcher.stop_all()
@@ -705,6 +1031,7 @@ class MainWindow(QMainWindow):
         notify callback in all undo commands so undo/redo keeps every view live."""
         self._canvas.update()
         self._layers_panel.refresh(self._project)
+        self._on_element_search_text_changed(self._search_bar.element_search_text())
         # Defer the panel rebuild to the next event-loop tick.  If this is
         # called from inside a widget signal handler (e.g. QDoubleSpinBox
         # editingFinished), the C++ widget would otherwise be destroyed while
@@ -733,7 +1060,7 @@ class MainWindow(QMainWindow):
             return
         path, _ = QFileDialog.getOpenFileName(
             self, t("Open Project"), "",
-            f"BIMAP Projects (*{PROJECT_FILE_EXTENSION});;All Files (*.*)"
+            f"MerekaiBIMAP Projects (*{PROJECT_FILE_EXTENSION});;All Files (*.*)"
         )
         if not path:
             return
@@ -748,7 +1075,7 @@ class MainWindow(QMainWindow):
     def _cmd_save_as(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self, t("Save Project As"), self._project.name,
-            f"BIMAP Projects (*{PROJECT_FILE_EXTENSION})"
+            f"MerekaiBIMAP Projects (*{PROJECT_FILE_EXTENSION})"
         )
         if path:
             self._save_to(Path(path))
@@ -807,7 +1134,7 @@ class MainWindow(QMainWindow):
         _render_page(painter, self._project, pr.width(), pr.height(), printer.resolution())
         painter.end()
 
-    def _cmd_import_geojson(self) -> None:
+    def _cmd_import_geojson(self, target_layer: str | None = None) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, t("Import GeoJSON"), "", "GeoJSON Files (*.geojson *.json);;All Files (*.*)"
         )
@@ -820,6 +1147,11 @@ class MainWindow(QMainWindow):
             for feat in features:
                 geom = feat.get("geometry", {})
                 props = feat.get("properties") or {}
+                if target_layer:
+                    props = dict(props)
+                    props["layer"] = target_layer
+                    props.pop("id", None)
+                imported_id = _parse_geojson_uuid(props.get("id"))
                 name = (props.get("name") or props.get("title")
                         or props.get("Name") or "Zone")
                 coords_raw = geom.get("coordinates", [])
@@ -827,7 +1159,14 @@ class MainWindow(QMainWindow):
                 if gtype == "Polygon" and coords_raw:
                     ring = coords_raw[0]
                     coords = [LatLon(lat=c[1], lon=c[0]) for c in ring]
-                    zone = Zone(name=name, zone_type=ZoneType.POLYGON, coordinates=coords)
+                    zone = Zone(id=imported_id or UUID(), name=name, zone_type=ZoneType.POLYGON, coordinates=coords)
+                    zone.layer = str(props.get("layer", "Default"))
+                    zone.group = str(props.get("group", ""))
+                    zone.visible = bool(props.get("visible", True))
+                    zone.metadata = {
+                        str(k): v for k, v in props.items()
+                        if k not in {"id", "name", "title", "Name", "layer", "group", "visible", "zone_type"}
+                    }
                     zone.label.text = name
                     cmd = AddZoneCommand(self._project, zone, self._refresh_all)
                     self._undo_stack.push(cmd)
@@ -836,10 +1175,91 @@ class MainWindow(QMainWindow):
                     for poly in coords_raw:
                         ring = poly[0]
                         coords = [LatLon(lat=c[1], lon=c[0]) for c in ring]
-                        zone = Zone(name=name, zone_type=ZoneType.POLYGON, coordinates=coords)
+                        zone = Zone(id=imported_id or UUID(), name=name, zone_type=ZoneType.POLYGON, coordinates=coords)
+                        zone.layer = str(props.get("layer", "Default"))
+                        zone.group = str(props.get("group", ""))
+                        zone.visible = bool(props.get("visible", True))
+                        zone.metadata = {
+                            str(k): v for k, v in props.items()
+                            if k not in {"id", "name", "title", "Name", "layer", "group", "visible", "zone_type"}
+                        }
                         zone.label.text = name
                         cmd = AddZoneCommand(self._project, zone, self._refresh_all)
                         self._undo_stack.push(cmd)
+                        imported += 1
+                elif gtype == "Point" and len(coords_raw) >= 2:
+                        if props.get("element_type") == "annotation":
+                            try:
+                                ann_type = AnnotationType(props.get("annotation_type", "text_box"))
+                            except ValueError:
+                                ann_type = AnnotationType.TEXT_BOX
+                            annotation = Annotation(
+                                id=imported_id or UUID(),
+                                ann_type=ann_type,
+                                anchor_lat=float(coords_raw[1]),
+                                anchor_lon=float(coords_raw[0]),
+                                content=str(props.get("content", name)),
+                                layer=str(props.get("layer", "Default")),
+                                visible=bool(props.get("visible", True)),
+                            )
+                            annotation.metadata = {
+                                str(k): v for k, v in props.items()
+                                if k not in {"id", "element_type", "annotation_type", "content", "name", "layer", "visible"}
+                            }
+                            self._undo_stack.push(
+                                AddAnnotationCommand(self._project, annotation, self._refresh_all)
+                            )
+                            imported += 1
+                            continue
+                        keypoint = Keypoint(
+                            id=imported_id or UUID(),
+                            name=name,
+                            lat=float(coords_raw[1]),
+                            lon=float(coords_raw[0]),
+                        )
+                        keypoint.layer = str(props.get("layer", "Default"))
+                        keypoint.group = str(props.get("group", ""))
+                        keypoint.metadata = {
+                            str(k): v for k, v in props.items()
+                            if k not in {"id", "name", "title", "Name", "layer", "group", "visible", "type"}
+                        }
+                        self._undo_stack.push(
+                            AddKeypointCommand(self._project, keypoint, self._refresh_all)
+                        )
+                        imported += 1
+                elif gtype == "LineString" and len(coords_raw) >= 2:
+                        if props.get("element_type") == "annotation":
+                            annotation = Annotation(
+                                id=imported_id or UUID(),
+                                ann_type=AnnotationType(props.get("annotation_type", "text_box")),
+                                anchor_lat=float(coords_raw[0][1]),
+                                anchor_lon=float(coords_raw[0][0]),
+                                content=str(props.get("content", name)),
+                                layer=str(props.get("layer", "Default")),
+                            )
+                            self._undo_stack.push(
+                                AddAnnotationCommand(self._project, annotation, self._refresh_all)
+                            )
+                            imported += 1
+                            continue
+                        line = Zone(
+                            id=imported_id or UUID(),
+                            name=name,
+                            zone_type=ZoneType.LINE,
+                            coordinates=[
+                                LatLon(lat=float(coords_raw[0][1]), lon=float(coords_raw[0][0])),
+                                LatLon(lat=float(coords_raw[-1][1]), lon=float(coords_raw[-1][0])),
+                            ],
+                        )
+                        line.layer = str(props.get("layer", "Default"))
+                        line.group = str(props.get("group", ""))
+                        line.visible = bool(props.get("visible", True))
+                        line.metadata = {
+                            str(k): v for k, v in props.items()
+                            if k not in {"id", "name", "title", "Name", "layer", "group", "visible", "zone_type"}
+                        }
+                        line.label.text = name
+                        self._undo_stack.push(AddZoneCommand(self._project, line, self._refresh_all))
                         imported += 1
             self.statusBar().showMessage(f"GeoJSON: imported {imported} zone(s).", 4000)
         except Exception as exc:
@@ -863,6 +1283,7 @@ class MainWindow(QMainWindow):
         # ── Zones ──────────────────────────────────────────────────────────── #
         for zone in self._project.zones:
             props: dict = {
+                "id": str(zone.id),
                 "name": zone.name,
                 "zone_type": str(zone.zone_type).split(".")[-1],
                 "group": zone.group,
@@ -876,7 +1297,14 @@ class MainWindow(QMainWindow):
                     props[k] = v
 
             zt = str(zone.zone_type)
-            if "circle" in zt and zone.coordinates:
+            if zone.zone_type == ZoneType.LINE and len(zone.coordinates) >= 2:
+                geometry = {
+                    "type": "LineString",
+                    "coordinates": [
+                        [round(c.lon, 7), round(c.lat, 7)] for c in zone.coordinates
+                    ],
+                }
+            elif "circle" in zt and zone.coordinates:
                 # Approximate circle as 64-sided polygon
                 c = zone.coordinates[0]
                 props["radius_m"] = zone.radius_m
@@ -905,6 +1333,7 @@ class MainWindow(QMainWindow):
         # ── Keypoints ─────────────────────────────────────────────────────── #
         for kp in self._project.keypoints:
             props = {
+                "id": str(kp.id),
                 "name": kp.name,
                 "type": "keypoint",
                 "group": getattr(kp, "group", ""),
@@ -915,6 +1344,33 @@ class MainWindow(QMainWindow):
                 if k not in hidden:
                     props[k] = v
             geometry = {"type": "Point", "coordinates": [round(kp.lon, 7), round(kp.lat, 7)]}
+            features.append({"type": "Feature", "geometry": geometry, "properties": props})
+
+        for ann in self._project.annotations:
+            if ann.anchor_lat is None or ann.anchor_lon is None:
+                continue
+            props = {
+                "id": str(ann.id),
+                "element_type": "annotation",
+                "annotation_type": ann.ann_type.value,
+                "content": ann.content,
+                "name": ann.content[:80],
+                "layer": ann.layer,
+                "visible": ann.visible,
+            }
+            for key, value in (ann.metadata or {}).items():
+                if key not in set(getattr(ann, "metadata_hidden", [])):
+                    props[key] = value
+            if ann.ann_type == AnnotationType.DIMENSION and ann.dimension_end_lat is not None and ann.dimension_end_lon is not None:
+                geometry = {
+                    "type": "LineString",
+                    "coordinates": [
+                        [ann.anchor_lon, ann.anchor_lat],
+                        [ann.dimension_end_lon, ann.dimension_end_lat],
+                    ],
+                }
+            else:
+                geometry = {"type": "Point", "coordinates": [ann.anchor_lon, ann.anchor_lat]}
             features.append({"type": "Feature", "geometry": geometry, "properties": props})
 
         collection = {
@@ -935,7 +1391,7 @@ class MainWindow(QMainWindow):
     def _cmd_export_backup(self) -> None:
         """Export the current project as a portable ZIP backup file."""
         path, _ = QFileDialog.getSaveFileName(
-            self, t("Export Data Backup"), "", "BIMAP Backup (*.bimap.zip);;All Files (*.*)"
+            self, t("Export Data Backup"), "", "MerekaiBIMAP Backup (*.bimap.zip);;All Files (*.*)"
         )
         if not path:
             return
@@ -969,6 +1425,153 @@ class MainWindow(QMainWindow):
                 f"{t('Exported')} {n_zones} {t('zone(s)')} {t('and')} "
                 f"{n_kps} {t('keypoint(s)')} {t('to')}:\n{path}",
             )
+        except Exception as exc:
+            QMessageBox.critical(self, t("Export Failed"), str(exc))
+
+    def _choose_exchange_format(self, title: str) -> str | None:
+        value, ok = QInputDialog.getItem(
+            self, title, t("Format"),
+            ["Backup (.bimap.zip)", "GeoJSON (.geojson)", "GeoPackage (.gpkg)", "CSV (.csv)", "Excel (.xlsx)"],
+            0, False,
+        )
+        return value.split(" ")[0].lower() if ok else None
+
+    def _cmd_export_elements_unified(self) -> None:
+        fmt = self._choose_exchange_format(t("Export Elements"))
+        if fmt == "geojson":
+            self._cmd_export_geojson()
+        elif fmt == "geopackage":
+            self._cmd_export_elements_geopackage()
+        elif fmt == "csv":
+            self._cmd_export_elements_csv()
+        elif fmt == "excel":
+            self._cmd_export_elements_excel()
+        elif fmt == "backup":
+            self._cmd_export_backup()
+
+    def _cmd_import_elements_unified(self) -> None:
+        fmt = self._choose_exchange_format(t("Import Elements"))
+        if fmt is None:
+            return
+        if fmt == "backup":
+            self._cmd_import_backup()
+            return
+        target_layer = self._choose_new_import_layer()
+        if target_layer is False:
+            return
+        if fmt == "geojson":
+            self._cmd_import_geojson(target_layer)
+        elif fmt == "csv":
+            self._cmd_import_elements_csv(target_layer)
+        elif fmt == "excel":
+            self._cmd_import_elements_excel(target_layer)
+        elif fmt == "geopackage":
+            path, _ = QFileDialog.getOpenFileName(
+                self, t("Import Elements GeoPackage"), "", "GeoPackage (*.gpkg)"
+            )
+            if not path:
+                return
+            policy = "duplicate" if target_layer else self._choose_import_conflict_policy()
+            if policy is None:
+                return
+            try:
+                count = import_elements_geopackage(self._project, Path(path), policy, target_layer or None)
+                self._refresh_all()
+                QMessageBox.information(self, t("GeoPackage Imported"), f"{count} element(s) imported.")
+            except Exception as exc:
+                QMessageBox.critical(self, t("Import Failed"), str(exc))
+
+    def _cmd_import_elements_csv(self, target_layer: str | None = None) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, t("Import Elements CSV"), "", "CSV Files (*.csv)")
+        if not path:
+            return
+        try:
+            policy = "duplicate" if target_layer else self._choose_import_conflict_policy()
+            if policy is None:
+                return
+            count = import_elements_csv(self._project, Path(path), policy, target_layer)
+            self._refresh_all()
+            QMessageBox.information(self, t("CSV Imported"), f"{count} element(s) imported.")
+        except Exception as exc:
+            QMessageBox.critical(self, t("Import Failed"), str(exc))
+
+    def _cmd_export_elements_excel(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, t("Export Elements Excel"), "", "Excel Files (*.xlsx)")
+        if not path:
+            return
+        try:
+            export_elements_excel(self._project, Path(path))
+            QMessageBox.information(self, t("Excel Exported"), t("Elements exported."))
+        except Exception as exc:
+            QMessageBox.critical(self, t("Export Failed"), str(exc))
+
+    def _cmd_import_elements_excel(self, target_layer: str | None = None) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, t("Import Elements Excel"), "", "Excel Files (*.xlsx)")
+        if not path:
+            return
+        try:
+            policy = "duplicate" if target_layer else self._choose_import_conflict_policy()
+            if policy is None:
+                return
+            count = import_elements_excel(self._project, Path(path), policy, target_layer)
+            self._refresh_all()
+            QMessageBox.information(self, t("Excel Imported"), f"{count} element(s) imported.")
+        except Exception as exc:
+            QMessageBox.critical(self, t("Import Failed"), str(exc))
+
+    def _choose_new_import_layer(self) -> str | None | bool:
+        """Offer new-layer mode; return False on cancel and None for current-layer mode."""
+        answer = QMessageBox.question(
+            self, t("Import Layer"), t("Import into a new layer?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No |
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer == QMessageBox.StandardButton.Cancel:
+            return False
+        if answer == QMessageBox.StandardButton.No:
+            return None
+        existing = {layer.name.casefold() for layer in self._project.layers}
+        from bimap.models.layer import Layer
+        while True:
+            name, ok = QInputDialog.getText(self, t("New Import Layer"), t("Unique layer name:"))
+            name = name.strip()
+            if not ok:
+                return False
+            if name and name.casefold() not in existing:
+                self._project.layers.append(Layer(name=name))
+                return name
+            QMessageBox.warning(self, t("Invalid layer"), t("Layer name must be unique and non-empty."))
+
+    def _choose_import_conflict_policy(self) -> str | None:
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(t("Import Conflict"))
+        dialog.setText(t("An imported element has the same ID as an existing element."))
+        update = dialog.addButton(t("Update attributes"), QMessageBox.ButtonRole.AcceptRole)
+        overwrite = dialog.addButton(t("Overwrite element"), QMessageBox.ButtonRole.DestructiveRole)
+        duplicate = dialog.addButton(t("Duplicate with suffix"), QMessageBox.ButtonRole.ActionRole)
+        dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+        button = dialog.clickedButton()
+        if button == update:
+            return "update_attributes"
+        if button == overwrite:
+            return "overwrite"
+        if button == duplicate:
+            return "duplicate"
+        return None
+
+    def _cmd_export_elements_geopackage(self) -> None:
+        """Export all zones and keypoints as a GeoPackage."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, t("Export Elements GeoPackage"), "", "GeoPackage (*.gpkg);;All Files (*.*)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".gpkg"):
+            path += ".gpkg"
+        try:
+            export_elements_geopackage(self._project, Path(path))
+            QMessageBox.information(self, t("GeoPackage Exported"), f"{t('Exported')}:\n{path}")
         except Exception as exc:
             QMessageBox.critical(self, t("Export Failed"), str(exc))
 
@@ -1060,8 +1663,36 @@ class MainWindow(QMainWindow):
         self._load_file(path)
 
     def _cmd_delete_selected(self) -> None:
-        if self._selected:
+        selected = getattr(self._canvas._interaction, "multi_selected", [])
+        if len(selected) > 1:
+            self._undo_stack.push(RemoveMultipleCommand(self._project, selected, self._refresh_all))
+        elif self._selected:
             self._delete_element(*self._selected)
+
+    def _cmd_fuse_selected_lines(self) -> None:
+        """Join selected lines/polylines through their closest vertices."""
+        selected = getattr(self._canvas._interaction, "multi_selected", [])
+        lines = [
+            z for etype, eid in selected if etype == "zone"
+            for z in self._project.zones
+            if str(z.id) == eid and z.zone_type == ZoneType.LINE and len(z.coordinates) >= 2
+        ]
+        if len(lines) < 2:
+            QMessageBox.information(self, t("Fuse Selected Lines"), t("Select at least two lines first."))
+            return
+        chain = _join_line_coordinates([list(line.coordinates) for line in lines])
+        if chain is None:
+            QMessageBox.warning(self, t("Fuse Selected Lines"), t("Selected lines are too far apart to join."))
+            return
+        fused = lines[0].model_copy(deep=True)
+        fused.id = uuid4()
+        fused.name = "fusion-" + "-".join(line.name for line in lines)
+        fused.coordinates = chain
+        self._undo_stack.push(RemoveMultipleCommand(
+            self._project, [("zone", str(z.id)) for z in lines], self._refresh_all
+        ))
+        self._undo_stack.push(AddZoneCommand(self._project, fused, self._refresh_all))
+        self._on_element_selected("zone", str(fused.id))
 
     def _cmd_search_location(self) -> None:
         dlg = GeocodeDialog(self)
@@ -1388,7 +2019,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             t("Restart required"),
-            t("Language changed. Please restart BIMAP to apply."),
+            t("Language changed. Please restart MerekaiBIMAP to apply."),
         )
 
     def _cmd_preferences(self) -> None:
@@ -1431,7 +2062,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 t("Restart required"),
-                t("Language changed. Please restart BIMAP to apply."),
+                t("Language changed. Please restart MerekaiBIMAP to apply."),
             )
 
     def _cmd_set_delimitation(self) -> None:
@@ -1595,6 +2226,22 @@ class MainWindow(QMainWindow):
         self._layers_panel.select_element(element_type, element_id)
         self._canvas.select_element(element_type, element_id)
 
+    def _on_layers_multi_select(self, items: list[tuple[str, str]]) -> None:
+        """Synchronize Ctrl-click selections from the layers panel with the map."""
+        self._canvas.set_multi_selected(items)
+        if not items:
+            return
+        # Keep the properties panel useful by showing the most recently
+        # selected row, while the map retains the complete multi-selection.
+        element_type, element_id = items[-1]
+        self._selected = (element_type, element_id)
+        element = self._find_element(element_type, element_id)
+        if element:
+            self._props_panel.show_element(element, element_type)
+            self._props_dock.raise_()
+        if len(items) == 1:
+            self._canvas.select_element(element_type, element_id)
+
     def _on_data_feature_selected(self, source_id: str, row_index: int) -> None:
         """Display attributes of a selected data feature (WFS/CSV/etc.)."""
         # Fetch the row data
@@ -1602,14 +2249,14 @@ class MainWindow(QMainWindow):
         if row_index < 0 or row_index >= len(rows):
             return
         row_data = dict(rows[row_index])
-        
+
         # Find the data source name
         ds = next((s for s in self._project.data_sources if str(s.id) == source_id), None)
         if ds:
             row_data["_source_name"] = ds.name
         else:
             row_data["_source_name"] = source_id
-        
+
         # Show in properties panel
         self._props_panel.show_element(row_data, "data_feature")
         self._props_dock.raise_()
@@ -1662,6 +2309,7 @@ class MainWindow(QMainWindow):
             element.visible = visible
             self._project.mark_modified()
             self._canvas.update()
+            self._on_element_search_text_changed(self._search_bar.element_search_text())
 
     def _on_data_layer_visibility_changed(self, layer_id: str, visible: bool) -> None:
         """Toggle visibility of a data layer overlay."""
@@ -1670,6 +2318,7 @@ class MainWindow(QMainWindow):
                 dl.visible = visible
                 break
         self._canvas.update()
+        self._on_element_search_text_changed(self._search_bar.element_search_text())
 
     def _on_data_layer_opacity_changed(self, layer_id: str, opacity: float) -> None:
         """Update opacity of a data layer overlay."""
@@ -1691,6 +2340,7 @@ class MainWindow(QMainWindow):
         self._project.mark_modified()
         self._canvas.update()
         self._layers_panel.refresh(self._project)
+        self._on_element_search_text_changed(self._search_bar.element_search_text())
 
     def _on_layer_add_requested(self) -> None:
         name, ok = QInputDialog.getText(self, t("Add Layer"), t("Layer name:"))
@@ -1778,6 +2428,7 @@ class MainWindow(QMainWindow):
         self._apply_metadata_bindings(source_id, rows)
         self._data_panel.update_source_status(source_id, "")
         self._canvas.update_data_layer_rows(source_id, rows)
+        self._on_element_search_text_changed(self._search_bar.element_search_text())
         # Auto-fly to data on first load if there are coordinates
         if is_first_load:
             self._fit_canvas_to_source(source_id, rows)
@@ -1905,6 +2556,8 @@ class MainWindow(QMainWindow):
     def _on_context_action(self, action: str, etype: str, eid: str) -> None:
         """Handle right-click context menu actions from the map canvas."""
         match action:
+            case "fuse":
+                self._cmd_fuse_selected_lines()
             case "remove":
                 name = eid[:8]
                 element = self._find_element(etype, eid)
@@ -1927,6 +2580,13 @@ class MainWindow(QMainWindow):
                 self._on_element_selected(etype, eid)
                 self._props_dock.show()
                 self._props_dock.raise_()
+                if etype == "zone":
+                    self._canvas.set_tool(ToolMode.EDIT_VERTICES)
+                    self._canvas._interaction.set_vertex_edit_zone(eid)
+                    self.statusBar().showMessage(
+                        t("Drag vertices; double-click a segment to add one; select a vertex and press Delete to remove it."),
+                        6000,
+                    )
             case "move":
                 self._canvas.set_tool(ToolMode.MOVE_ELEMENT)
                 self._canvas._interaction.start_move_element(etype, eid)
@@ -2006,6 +2666,15 @@ class MainWindow(QMainWindow):
             self._undo_stack.push(cmd)
             self._on_element_selected("zone", str(lasso_zone.id))
 
+    def _on_selection_box(self, items: list) -> None:
+        """Apply a rectangular map selection without opening the lasso dialog."""
+        self._canvas.set_multi_selected(items)
+        self._layers_panel.select_elements(items)
+        if items:
+            self._on_layers_multi_select(items)
+        else:
+            self._on_element_selected("", "")
+
     def _on_network_status_changed(self, is_online: bool) -> None:
         if is_online:
             self._net_label.setText("🌐 Online")
@@ -2023,14 +2692,47 @@ class MainWindow(QMainWindow):
         zone = self._find_element("zone", eid)
         if not zone:
             return
-        old = copy.deepcopy(zone)
-        zone.rotation_deg = degrees % 360.0
-        _update_dimensions_attr(zone)
-        _update_zone_derived_attrs(zone)
-        new = copy.deepcopy(zone)
-        self._undo_stack.push(EditZoneCommand(self._project, old, new, self._notify_canvas))
+        selected = getattr(self._canvas._interaction, "multi_selected", [])
+        zone_ids = [selected_id for selected_type, selected_id in selected if selected_type == "zone"]
+        if len(zone_ids) > 1:
+            self._undo_stack.beginMacro(t("Rotate Selected Elements"))
+            for selected_id in zone_ids:
+                selected_zone = self._find_element("zone", selected_id)
+                if selected_zone is None:
+                    continue
+                old = copy.deepcopy(selected_zone)
+                selected_zone.rotation_deg = degrees % 360.0
+                _update_dimensions_attr(selected_zone)
+                _update_zone_derived_attrs(selected_zone)
+                self._undo_stack.push(EditZoneCommand(
+                    self._project, old, copy.deepcopy(selected_zone), self._notify_canvas
+                ))
+            self._undo_stack.endMacro()
+        else:
+            old = copy.deepcopy(zone)
+            zone.rotation_deg = degrees % 360.0
+            _update_dimensions_attr(zone)
+            _update_zone_derived_attrs(zone)
+            self._undo_stack.push(EditZoneCommand(self._project, old, copy.deepcopy(zone), self._notify_canvas))
         # Sync the toolbar spinbox with the arrow-key driven angle
         self._toolbar.set_rotate_angle(degrees)
+
+    def _on_zone_vertices_changed(self, zone_id: str, coordinates: list[LatLon]) -> None:
+        zone = self._find_element("zone", zone_id)
+        if zone is None or zone.locked or zone.coordinates == coordinates:
+            return
+        old = copy.deepcopy(zone)
+        zone.coordinates = copy.deepcopy(coordinates)
+        if zone.zone_type == ZoneType.RECTANGLE:
+            zone.zone_type = ZoneType.POLYGON
+            zone.width_m = 0.0
+            zone.height_m = 0.0
+            zone.rotation_deg = 0.0
+        _update_geo_space_attr(zone)
+        _update_zone_derived_attrs(zone)
+        self._undo_stack.push(
+            EditZoneCommand(self._project, old, copy.deepcopy(zone), self._notify_canvas)
+        )
 
     def _on_rotate_degree_from_toolbar(self, degrees: float) -> None:
         """Handle direct degree entry from the toolbar spinbox (debounced undo)."""
@@ -2061,8 +2763,30 @@ class MainWindow(QMainWindow):
 
     def _on_element_move_dropped(self, etype: str, eid: str, lat: float, lon: float) -> None:
         """Push a MoveElementCommand when the user drops an element at the new position."""
-        cmd = MoveElementCommand(self._project, etype, eid, lat, lon, self._refresh_all)
-        self._undo_stack.push(cmd)
+        selected = getattr(self._canvas._interaction, "multi_selected", [])
+        if len(selected) <= 1:
+            self._undo_stack.push(
+                MoveElementCommand(self._project, etype, eid, lat, lon, self._refresh_all)
+            )
+            return
+        dragged = self._find_element(etype, eid)
+        if dragged is None:
+            return
+        origin = self._element_center(dragged, etype)
+        if origin is None:
+            return
+        delta_lat, delta_lon = lat - origin[0], lon - origin[1]
+        self._undo_stack.beginMacro(t("Move Selected Elements"))
+        for selected_type, selected_id in selected:
+            element = self._find_element(selected_type, selected_id)
+            center = self._element_center(element, selected_type) if element else None
+            if center is None:
+                continue
+            self._undo_stack.push(MoveElementCommand(
+                self._project, selected_type, selected_id,
+                center[0] + delta_lat, center[1] + delta_lon, self._refresh_all,
+            ))
+        self._undo_stack.endMacro()
         # Keep geo-space and derived attrs current after the move
         element = self._find_element(etype, eid)
         if element:
@@ -2072,6 +2796,19 @@ class MainWindow(QMainWindow):
             elif etype == "annotation":
                 _update_dimension_attrs(element)
             self._project.mark_modified()
+
+    @staticmethod
+    def _element_center(element: Any, element_type: str) -> tuple[float, float] | None:
+        if element_type == "zone" and element.coordinates:
+            return (
+                sum(point.lat for point in element.coordinates) / len(element.coordinates),
+                sum(point.lon for point in element.coordinates) / len(element.coordinates),
+            )
+        if element_type == "keypoint":
+            return element.lat, element.lon
+        if element_type == "annotation" and element.anchor_lat is not None and element.anchor_lon is not None:
+            return element.anchor_lat, element.anchor_lon
+        return None
 
     def _on_add_annotation_at(self, ann_type: str, lat: float, lon: float) -> None:
         """Create a text annotation at the right-clicked map position."""
@@ -2262,7 +2999,7 @@ def _sync_svg_background_attr(element: Any, path: str) -> None:
     """Keep the hidden ``__svg_background`` metadata key in sync with ``svg_fill_url``.
 
     The key is added to ``metadata_hidden`` so it is invisible in the extension
-    viewer (BIMAP_DATA.metadata) by default, but extension HTML can opt-in by
+    viewer (MerekaiBIMAP_DATA.metadata) by default, but extension HTML can opt-in by
     un-hiding it if needed.
     """
     _KEY = "__svg_background"
@@ -2282,7 +3019,7 @@ def _update_geo_space_attr(element: Any) -> None:
     """Persist element coordinates as a JSON string in the hidden ``geo-space`` attribute.
 
     Always keeps ``geo-space`` in ``metadata_hidden`` so it does not clutter
-    the extension viewer, but extension HTML can access it via BIMAP_DATA if needed.
+    the extension viewer, but extension HTML can access it via MerekaiBIMAP_DATA if needed.
     """
     _KEY = "geo-space"
     meta: dict = dict(getattr(element, "metadata", {}))

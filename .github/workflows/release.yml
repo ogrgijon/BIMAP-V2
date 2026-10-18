@@ -1,6 +1,6 @@
 name: Build and Release (Windows x64)
 
-# Fires when a version tag is pushed: git tag v0.2.0 && git push --tags
+# Fires when a version tag is pushed: git tag v2.1.0 && git push --tags
 on:
   push:
     tags:

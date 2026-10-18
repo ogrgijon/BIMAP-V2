@@ -39,6 +39,7 @@ from bimap.i18n import t
 from bimap.models.annotation import Annotation
 from bimap.models.keypoint import Keypoint
 from bimap.models.zone import Zone, ZoneType
+from bimap.models.style import BorderStyle
 from bimap.ui.widgets import ColorButton
 from bimap.ui._utils import ask_question, create_help_button, show_help_dialog
 
@@ -299,20 +300,21 @@ class PropertiesPanel(QWidget):
         )
 
         # Style section
-        bg = QGroupBox(t("Fill"))
-        bg_layout = QFormLayout(bg)
-        fill_btn = ColorButton(zone.style.fill_color)
-        fill_btn.setToolTip(t("Fill color used inside the zone"))
-        fill_btn.color_changed.connect(lambda c: self._emit("style.fill_color", c))
-        bg_layout.addRow(t("Color"), fill_btn)
+        if zone.zone_type != ZoneType.LINE:
+            bg = QGroupBox(t("Fill"))
+            bg_layout = QFormLayout(bg)
+            fill_btn = ColorButton(zone.style.fill_color)
+            fill_btn.setToolTip(t("Fill color used inside the zone"))
+            fill_btn.color_changed.connect(lambda c: self._emit("style.fill_color", c))
+            bg_layout.addRow(t("Color"), fill_btn)
 
-        alpha_slider = QSlider(Qt.Orientation.Horizontal)
-        alpha_slider.setRange(0, 255)
-        alpha_slider.setValue(zone.style.fill_alpha)
-        alpha_slider.setToolTip(t("Fill opacity from transparent to opaque"))
-        alpha_slider.valueChanged.connect(lambda v: self._emit("style.fill_alpha", v))
-        bg_layout.addRow(t("Opacity"), alpha_slider)
-        self._form.addRow(bg)
+            alpha_slider = QSlider(Qt.Orientation.Horizontal)
+            alpha_slider.setRange(0, 255)
+            alpha_slider.setValue(zone.style.fill_alpha)
+            alpha_slider.setToolTip(t("Fill opacity from transparent to opaque"))
+            alpha_slider.valueChanged.connect(lambda v: self._emit("style.fill_alpha", v))
+            bg_layout.addRow(t("Opacity"), alpha_slider)
+            self._form.addRow(bg)
 
         border_grp = QGroupBox(t("Border"))
         border_layout = QFormLayout(border_grp)
@@ -327,6 +329,17 @@ class PropertiesPanel(QWidget):
             lambda: self._emit("style.border_width", int(bw_edit.text() or "0"))
         )
         border_layout.addRow(t("Width"), bw_edit)
+        style_combo = QComboBox()
+        for style in BorderStyle:
+            style_combo.addItem(t(style.value.title()), style)
+        style_index = style_combo.findData(zone.style.border_style)
+        if style_index >= 0:
+            style_combo.setCurrentIndex(style_index)
+        style_combo.setToolTip(t("Line pattern"))
+        style_combo.currentIndexChanged.connect(
+            lambda: self._emit("style.border_style", style_combo.currentData())
+        )
+        border_layout.addRow(t("Line Type"), style_combo)
         self._form.addRow(border_grp)
 
         label_grp = QGroupBox(t("Label"))
@@ -1219,7 +1232,7 @@ class PropertiesPanel(QWidget):
         # Show all attributes in a table
         attrs_grp = QGroupBox(t("Attributes"))
         attrs_layout = QVBoxLayout(attrs_grp)
-        
+
         table = QTableWidget()
         table.setColumnCount(2)
         table.setHorizontalHeaderLabels([t("Field"), t("Value")])
@@ -1244,4 +1257,3 @@ class PropertiesPanel(QWidget):
         table.resizeColumnsToContents()
         attrs_layout.addWidget(table)
         self._form.addRow(attrs_grp)
-

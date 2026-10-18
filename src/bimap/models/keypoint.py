@@ -37,7 +37,7 @@ class Keypoint(BaseModel):
     layer: str = "Default"
     keynote_number: int | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
-    metadata_hidden: list[str] = Field(default_factory=list)           # keys hidden from BIMAP_DATA
+    metadata_hidden: list[str] = Field(default_factory=list)           # keys hidden from MerekaiBIMAP_DATA
     metadata_bindings: dict[str, MetadataKeyBinding] = Field(default_factory=dict)  # key → source binding
     extension_html: str = ""         # optional HTML5/CSS/JS viewer extension
     extension_name: str = ""         # display name of the assigned extension

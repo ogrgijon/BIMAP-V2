@@ -105,7 +105,9 @@ class OverlayRenderer:
             if ann.visible:
                 self._draw_annotation(
                     painter, ann, ctx,
-                    selected=selected_type == "annotation" and selected_id == str(ann.id),
+                    selected=(
+                        selected_type == "annotation" and selected_id == str(ann.id)
+                    ) or ("annotation", str(ann.id)) in _multi,
                 )
         if moving_obj is not None and moving_element is not None:
             _, _, target_lat, target_lon = moving_element
@@ -164,7 +166,11 @@ class OverlayRenderer:
         pen = QPen(QColor(0, 180, 255), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        if zone.zone_type == ZoneType.CIRCLE:
+        if zone.zone_type == ZoneType.LINE:
+            path = self._line_path(zone, ctx)
+            painter.drawPath(path)
+            return
+        elif zone.zone_type == ZoneType.CIRCLE:
             if zone.coordinates:
                 c = zone.coordinates[0]
                 px = self._to_px(c.lat, c.lon, ctx)
@@ -211,9 +217,9 @@ class OverlayRenderer:
 
     def _draw_multi_select_zone(self, painter: QPainter, zone: Zone, ctx: tuple) -> None:
         """Draw an orange dashed outline for zones in the magic-wand selection."""
-        pen = QPen(QColor(255, 140, 0), 2, Qt.PenStyle.DashDotLine)
+        pen = QPen(QColor(0, 180, 255), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(255, 140, 0, 50))
+        painter.setBrush(QColor(0, 180, 255, 50))
         if zone.zone_type == ZoneType.CIRCLE and zone.coordinates:
             center_lat, center_lon, zoom, w, h = ctx
             c = zone.coordinates[0]
@@ -251,9 +257,9 @@ class OverlayRenderer:
             return
         pos = self._to_px(kp.lat, kp.lon, ctx)
         r = kp.icon_size + 6
-        pen = QPen(QColor(255, 140, 0), 2, Qt.PenStyle.DashDotLine)
+        pen = QPen(QColor(0, 180, 255), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(255, 140, 0, 50))
+        painter.setBrush(QColor(0, 180, 255, 50))
         painter.drawEllipse(QRectF(pos.x() - r, pos.y() - r, r * 2, r * 2))
 
     # ── Delimitation overlay ───────────────────────────────────────────────────
@@ -474,9 +480,11 @@ class OverlayRenderer:
             pen.setStyle(Qt.PenStyle.DotLine)
 
         painter.setPen(pen)
-        painter.setBrush(QBrush(fill))
+        painter.setBrush(Qt.BrushStyle.NoBrush if zone.zone_type == ZoneType.LINE else QBrush(fill))
 
-        if zone.zone_type == ZoneType.CIRCLE:
+        if zone.zone_type == ZoneType.LINE:
+            zone_path = self._line_path(zone, ctx)
+        elif zone.zone_type == ZoneType.CIRCLE:
             zone_path = self._circle_path(zone, ctx)
         elif (
             zone.zone_type == ZoneType.RECTANGLE
@@ -499,6 +507,12 @@ class OverlayRenderer:
                 painter.rotate(rotation_deg)
                 painter.translate(-pivot_x, -pivot_y)
             painter.drawPath(zone_path)
+            if zone.zone_type == ZoneType.LINE and len(zone.coordinates) >= 2:
+                start = self._to_px(zone.coordinates[0].lat, zone.coordinates[0].lon, ctx)
+                end = self._to_px(zone.coordinates[1].lat, zone.coordinates[1].lon, ctx)
+                painter.setBrush(border)
+                painter.drawEllipse(start, 3.0, 3.0)
+                painter.drawEllipse(end, 3.0, 3.0)
             if zone.svg_fill_url and os.path.isfile(zone.svg_fill_url):
                 self._draw_svg_fill(painter, zone_path, zone.svg_fill_url)
             if rotated:
@@ -518,6 +532,14 @@ class OverlayRenderer:
         path = QPainterPath()
         path.addPolygon(poly)
         path.closeSubpath()
+        return path
+
+    def _line_path(self, zone: Zone, ctx: tuple) -> QPainterPath | None:
+        if len(zone.coordinates) < 2:
+            return None
+        path = QPainterPath(self._to_px(zone.coordinates[0].lat, zone.coordinates[0].lon, ctx))
+        for coordinate in zone.coordinates[1:]:
+            path.lineTo(self._to_px(coordinate.lat, coordinate.lon, ctx))
         return path
 
     def _circle_path(self, zone: Zone, ctx: tuple) -> QPainterPath | None:
@@ -603,6 +625,10 @@ class OverlayRenderer:
         painter.setFont(font)
         painter.setPen(QColor(ls.color))
 
+        if zone.zone_type == ZoneType.LINE:
+            self._draw_line_zone_label(painter, zone, ctx, font)
+            return
+
         if zone.coordinates:
             # Centroid of vertices
             lats = [c.lat for c in zone.coordinates]
@@ -635,6 +661,58 @@ class OverlayRenderer:
                                 pos.y() + zone.label.offset_y + scaled_size + 3),
                         dim_text,
                     )
+
+    def _draw_line_zone_label(
+        self, painter: QPainter, zone: Zone, ctx: tuple, font: QFont
+    ) -> None:
+        if len(zone.coordinates) < 2:
+            return
+
+        label = zone.label.text
+        label_width = QFontMetricsF(font).horizontalAdvance(label)
+        min_segment_length = label_width + 12
+        points = [self._to_px(c.lat, c.lon, ctx) for c in zone.coordinates]
+
+        rotation = math.radians(zone.rotation_deg)
+        cos_rotation, sin_rotation = math.cos(rotation), math.sin(rotation)
+        pivot = QPointF(
+            sum(point.x() for point in points) / len(points),
+            sum(point.y() for point in points) / len(points),
+        )
+        if zone.rotation_deg:
+            points = [
+                QPointF(
+                    pivot.x() + (point.x() - pivot.x()) * cos_rotation
+                    - (point.y() - pivot.y()) * sin_rotation,
+                    pivot.y() + (point.x() - pivot.x()) * sin_rotation
+                    + (point.y() - pivot.y()) * cos_rotation,
+                )
+                for point in points
+            ]
+
+        for start, end in zip(points, points[1:]):
+            dx, dy = end.x() - start.x(), end.y() - start.y()
+            length = math.hypot(dx, dy)
+            if length < min_segment_length:
+                continue
+
+            angle = math.degrees(math.atan2(dy, dx))
+            if angle > 90:
+                angle -= 180
+            elif angle < -90:
+                angle += 180
+
+            midpoint = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
+            painter.save()
+            painter.translate(
+                QPointF(
+                    midpoint.x() + zone.label.offset_x,
+                    midpoint.y() + zone.label.offset_y,
+                )
+            )
+            painter.rotate(angle)
+            painter.drawText(QPointF(-label_width / 2, -2), label)
+            painter.restore()
 
     # ── Keypoint rendering ─────────────────────────────────────────────────────
 
@@ -1244,7 +1322,7 @@ class OverlayRenderer:
 
     def hit_test_data_feature(self, px: float, py: float) -> tuple[str, int] | None:
         """Check if the given pixel coordinates hit any data layer feature.
-        
+
         Returns (source_id, row_index) of the topmost hit feature, or None.
         Features are tested in reverse draw order (topmost first).
         """

@@ -1,6 +1,6 @@
-# BIMAP Extensions Manual
+# MerekaiBIMAP Extensions Manual
 
-Extensions let you attach a custom **HTML5 / CSS / JavaScript widget** to any zone or keypoint on the map. When the viewer opens, BIMAP automatically injects the element's live data as a JavaScript object called `BIMAP_DATA`, so your template can render charts, tables, gauges, sensor readings, or any other display without any server-side code.
+Extensions let you attach a custom **HTML5 / CSS / JavaScript widget** to any zone or keypoint on the map. When the viewer opens, MerekaiBIMAP automatically injects the element's live data as a JavaScript object called `BIMAP_DATA`, so your template can render charts, tables, gauges, sensor readings, or any other display without any server-side code.
 
 ---
 
@@ -24,7 +24,7 @@ An extension is a self-contained HTML document assigned to a map element. It can
 Key facts:
 
 - Stored **inside the `.bimap` project file** — no external files needed.
-- Rendered **inside BIMAP** using an embedded browser (requires `PyQtWebEngine`) or in your system browser as a fallback.
+- Rendered **inside MerekaiBIMAP** using an embedded browser (requires `PyQtWebEngine`) or in your system browser as a fallback.
 - The `BIMAP_DATA` variable is injected at render time, so the template always reflects the current state of the element.
 - The Extension Library lets you save and reuse templates across many elements.
 
@@ -32,7 +32,7 @@ Key facts:
 
 ## 2. BIMAP_DATA Reference
 
-When BIMAP renders an extension it prepends a `<script>` block containing:
+When MerekaiBIMAP renders an extension it prepends a `<script>` block containing:
 
 ```js
 const BIMAP_DATA = { ... };
@@ -126,7 +126,7 @@ There are three ways to open the rendered extension for an element:
 |--------|-----|
 | **Launch Viewer** button | Properties panel → Extension tab → *Launch Viewer* |
 | **Right-click context menu** | Right-click an element on the map → *🔗 Open Extension…* (only appears if an extension is set) |
-| **System browser** | If `PyQtWebEngine` is not installed, BIMAP falls back to opening a temp HTML file in your default browser |
+| **System browser** | If `PyQtWebEngine` is not installed, MerekaiBIMAP falls back to opening a temp HTML file in your default browser |
 
 The in-app viewer:
 
@@ -254,7 +254,7 @@ Below is a complete extension template that compares multiple sensor readings ag
 - **Same-origin restrictions**: The in-app viewer uses a local URL (the HTML is written to a temp file); external `fetch()` calls to HTTP APIs work only when the Chromium sandbox allows them. If you need to pull live data, prefer `https://` API endpoints — most public APIs support CORS.
 - **No persistence in the template**: `BIMAP_DATA` is re-injected fresh each time you open the viewer. If your extension writes to `localStorage`, that state survives between viewer opens but is not stored in the `.bimap` file.
 - **Library vs. element copy**: "From Library…" copies the HTML at the moment of import. Later changes to the library entry are **not** reflected in elements that already imported it (and vice versa).
-- **Fallback mode (no PyQtWebEngine)**: When the embedded browser is unavailable, BIMAP writes the rendered HTML to a temporary file and opens it in your system browser. The temp file is deleted when the dialog closes.
+- **Fallback mode (no PyQtWebEngine)**: When the embedded browser is unavailable, MerekaiBIMAP writes the rendered HTML to a temporary file and opens it in your system browser. The temp file is deleted when the dialog closes.
 - **Fonts and images**: You can reference fonts via CDN (`fonts.googleapis.com`) or embed them as Base64 `data:` URIs. External `<img src="...">` tags work as long as the URL is reachable.
 - **Chart libraries**: CDN-hosted libraries like [Chart.js](https://www.chartjs.org/) or [Plotly](https://plotly.com/javascript/) work out of the box:
   ```html

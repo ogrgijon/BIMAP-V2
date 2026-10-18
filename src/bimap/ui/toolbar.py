@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QActionGroup
+from PyQt6.QtCore import QModelIndex, Qt, pyqtSignal
+from PyQt6.QtGui import QAction, QActionGroup, QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import (
+    QCompleter,
     QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
@@ -93,18 +94,23 @@ class SearchBar(QToolBar):
     """
     Slim top toolbar containing:
       • Geocoder search input + Search button
+      • Map element attribute search with autocomplete
       • Tile provider selector
       • Zoom in / Zoom out
 
     Signals
     -------
     search_requested(str)
+    element_search_text_changed(str)
+    element_search_requested(object)
     tile_provider_changed(str)
     zoom_in_requested()
     zoom_out_requested()
     """
 
     search_requested = pyqtSignal(str)
+    element_search_text_changed = pyqtSignal(str)
+    element_search_requested = pyqtSignal(object)
     tile_provider_changed = pyqtSignal(str)
     zoom_in_requested = pyqtSignal()
     zoom_out_requested = pyqtSignal()
@@ -133,6 +139,31 @@ class SearchBar(QToolBar):
         btn_search.setToolTip(t("Search location (Enter)"))
         btn_search.clicked.connect(self._emit_search)
         self.addWidget(btn_search)
+
+        self.addSeparator()
+
+        # ── Map element search ────────────────────────────────────────────── #
+        self._element_search_edit = QLineEdit()
+        self._element_search_edit.setPlaceholderText(t("Search map attributes…"))
+        self._element_search_edit.setToolTip(t("Search map attributes and element values"))
+        self._element_search_edit.setMinimumWidth(220)
+        self._element_search_edit.setMaximumWidth(420)
+        self._element_search_edit.setStyleSheet(
+            "font-size: 12px; padding: 4px 8px;"
+            "background:#3C3C3C; color:#D4D4D4;"
+            "border:1px solid #555; border-radius:3px;"
+        )
+        self._element_suggestion_model = QStandardItemModel(self)
+        self._element_completer = QCompleter(self._element_suggestion_model, self)
+        self._element_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._element_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._element_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self._element_search_edit.setCompleter(self._element_completer)
+        self._element_search_edit.textEdited.connect(self.element_search_text_changed)
+        self._element_completer.activated[QModelIndex].connect(
+            self._on_element_suggestion_activated
+        )
+        self.addWidget(self._element_search_edit)
 
         self.addSeparator()
 
@@ -176,6 +207,28 @@ class SearchBar(QToolBar):
         if query:
             self.search_requested.emit(query)
 
+    def element_search_text(self) -> str:
+        return self._element_search_edit.text()
+
+    def set_element_search_suggestions(self, suggestions: list[tuple[str, object]]) -> None:
+        self._element_suggestion_model.clear()
+        for label, target in suggestions:
+            item = QStandardItem(label)
+            item.setData(target, Qt.ItemDataRole.UserRole)
+            self._element_suggestion_model.appendRow(item)
+
+        query = self._element_search_edit.text()
+        if query and suggestions:
+            self._element_completer.setCompletionPrefix(query)
+            self._element_completer.complete()
+        else:
+            self._element_completer.popup().hide()
+
+    def _on_element_suggestion_activated(self, index: QModelIndex) -> None:
+        target = index.data(Qt.ItemDataRole.UserRole)
+        if target is not None:
+            self.element_search_requested.emit(target)
+
 
 # ── MapToolbar (VS Code Activity Bar) ────────────────────────────────────────
 
@@ -203,7 +256,7 @@ class MapToolbar(QToolBar):
     # Emitted when the user types a degree value into the rotate spinbox
     rotate_degree_changed = pyqtSignal(float)
 
-    # Navigate section: SELECT, PAN | ROTATE, MOVE | separator | MAGIC_WAND (Dynamic Selector)
+    # Navigate: selection and pan.
     _NAVIGATE_TOOLS_PRIMARY: list[tuple[str, str, ToolMode]] = [
         ("⬡", "Select / move elements", ToolMode.SELECT),
         ("✋", "Pan the map", ToolMode.PAN),
@@ -223,6 +276,8 @@ class MapToolbar(QToolBar):
     )
     _CREATE_TOOLS: list[tuple[str, str, ToolMode]] = [
         ("⬠", "Draw polygon zone", ToolMode.DRAW_POLYGON),
+        ("╱", "Draw line (click start, click end)", ToolMode.DRAW_LINE),
+        ("⤢", "Draw polyline (click points, double-click to finish)", ToolMode.DRAW_POLYLINE),
         ("▭", "Draw rectangle zone", ToolMode.DRAW_RECTANGLE),
         ("◯", "Draw circle zone", ToolMode.DRAW_CIRCLE),
         ("📍", "Place keypoint marker", ToolMode.DRAW_KEYPOINT),
@@ -233,10 +288,13 @@ class MapToolbar(QToolBar):
         ToolMode.PAN: "H",
         ToolMode.ROTATE_ELEMENT: "R",
         ToolMode.MOVE_ELEMENT: "G",
+        ToolMode.EDIT_VERTICES: "V",
         ToolMode.MAGIC_WAND: "L",
         ToolMode.MEASURE: "M",
         ToolMode.DIMENSION: "D",
         ToolMode.DRAW_POLYGON: "P",
+        ToolMode.DRAW_LINE: "L",
+        ToolMode.DRAW_POLYLINE: "Ctrl+L",
         ToolMode.DRAW_RECTANGLE: "B",
         ToolMode.DRAW_CIRCLE: "O",
         ToolMode.DRAW_KEYPOINT: "K",
@@ -425,6 +483,11 @@ class MapToolbar(QToolBar):
         action = self._tool_actions.get(mode)
         if action:
             action.setChecked(True)
+        else:
+            self._group.setExclusive(False)
+            for tool_action in self._tool_actions.values():
+                tool_action.setChecked(False)
+            self._group.setExclusive(True)
         self._rotate_container.setVisible(mode == ToolMode.ROTATE_ELEMENT)
 
     def set_rotate_angle(self, degrees: float) -> None:
